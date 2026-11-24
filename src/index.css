@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    font-family: "Cairo", system-ui, -apple-system, sans-serif;
+    direction: rtl;
+  }
+
+  .font-mono-num {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes flashHighlight {
+  0% {
+    background-color: #fef08a;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.highlight-flash {
+  animation: flashHighlight 2.5s ease-out;
+}
+
+@keyframes tourRing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.8);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(217, 119, 6, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0);
+  }
+}
+
+.tour-highlight {
+  animation: tourRing 1.2s infinite;
+  outline: 2.5px solid #d97706;
+  outline-offset: 2px;
+  position: relative;
+  z-index: 45;
+}
+
+/* Thermal 80mm Receipt Print Layout */
+#receiptPrintArea {
+  display: none;
+}
+
+@page {
+  size: 80mm auto;
+  margin: 0;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receiptPrintArea,
+  #receiptPrintArea * {
+    visibility: visible;
+  }
+  #receiptPrintArea {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 78mm;
+    margin: 0;
+    padding: 4mm 2mm;
+    font-family: "Cairo", Tahoma, sans-serif;
+    color: #000;
+    background: #fff;
+    direction: rtl;
+  }
+}

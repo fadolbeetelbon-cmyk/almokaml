@@ -1,0 +1,6 @@
+{
+  "name": "Roast Shift — النظام الموحد للحضور وتخطيط الورديات",
+  "description": "نظام موحد يجمع إدارة الحضور والرواتب للفروع مع لوحة تخطيط الورديات الأسبوعية والإجازات ومطابقة الإرسال اليومي تلقائياً.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

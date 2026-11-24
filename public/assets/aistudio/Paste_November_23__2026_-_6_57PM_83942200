@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>نظام إدارة الحضور والفروع</title>
+<style>
+:root{
+  --wa-header:#008069; --wa-header-sub:#005e4e; --wa-bg:#efeae2;
+  --wa-green:#25d366; --wa-green-dark:#128c7e; --card:#ffffff; --text:#111b21;
+  --muted:#667781; --border:#e2e8f0; --red:#ef4444; --red-bg:#fef2f2;
+}
+*{box-sizing:border-box}
+.wa-chat-bg {
+  background-color: #efeae2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill='%23d4cfc4' fill-opacity='0.25'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z'/%3E%3C/g%3E%3C/svg%3E");
+}
+body{margin:0;padding:0;background:var(--wa-bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,sans-serif;direction:rtl;padding-bottom:40px}
+.wa-app-bar{background:var(--wa-header);color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+.wa-user-info{display:flex;align-items:center;gap:12px}
+.wa-avatar{width:40px;height:40px;background:#dfe3e5;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:var(--wa-header);font-size:1.1rem}
+.wa-names h1{margin:0;font-size:1.05rem;font-weight:600}
+.wa-names span{font-size:0.75rem;opacity:0.85}
+.bar-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.bar-btn{background:rgba(255,255,255,0.25);color:#fff;border:0;border-radius:8px;padding:7px 10px;font-weight:700;font-size:.74rem;cursor:pointer;position:relative}
+.tour-start-btn{background:#25d366;color:#053b30;border:0;border-radius:8px;padding:7px 10px;font-weight:700;font-size:.74rem;cursor:pointer}
+.notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:0.65rem;padding:2px 5px;border-radius:10px;font-weight:bold}
+
+.wrap{max-width:550px;margin:0 auto;padding:10px}
+body.central .wrap{max-width:100%;width:100%;padding:16px 20px}
+.screen{display:none}.screen.active{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.02)}
+.center{text-align:center}
+h2{font-size:1.05rem;margin:0 0 14px;color:var(--wa-header-sub)}
+button{font-family:inherit;cursor:pointer}
+.btn{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:.85rem;color:var(--wa-header-sub);transition:all .2s}
+.btn:hover{background:#f8fafc}
+.btn-p{background:var(--wa-header);color:#fff;border-color:var(--wa-header)}
+.btn-p:hover{background:#006d59}
+.btn-print{background:#0284c7;color:#fff;border-color:#0284c7}
+.btn-print:hover{background:#0369a1}
+.btn-danger{background:var(--red);color:#fff;border-color:var(--red)}
+.btn-danger:hover{background:#dc2626}
+.btn:disabled{opacity:.45;cursor:default}
+.big{width:100%;padding:14px;font-size:1.05rem;font-weight:700;border:1px solid var(--wa-green);background:#e7fce3;color:var(--wa-green-dark);border-radius:10px;margin-bottom:10px}
+.big:hover{background:#dcf8c6}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pin{width:100%;font-size:1.6rem;text-align:center;letter-spacing:6px;padding:12px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;direction:ltr;background:#fff}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;direction:ltr}
+.keypad button{padding:14px;font-size:1.2rem;font-weight:700;border:1px solid var(--border);background:#fff;border-radius:8px}
+.err{color:var(--red);font-weight:700;min-height:22px;margin-bottom:8px}
+.demo{font-size:.78rem;color:var(--text);background:rgba(255,255,255,0.8);border:1px dashed var(--border);border-radius:8px;padding:8px;margin-top:10px;text-align:right}
+.nav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.dcard{background:var(--card);border:1px solid var(--border);border-top:4px solid var(--red);border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.03)}
+.dcard.orange{border-top-color:#ea580c}.dcard.green{border-top-color:var(--wa-green)}
+.dcard b{display:block;margin-bottom:6px;font-size:.9rem}
+.tag{font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:12px;display:inline-block}
+.t-red{background:#fee7e7;color:var(--red)}.t-orange{background:#ffedd5;color:#ea580c}.t-green{background:#e7fce3;color:var(--wa-green-dark)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px 0 2px;vertical-align:middle}
+.dot-red{background:var(--red)}.dot-orange{background:#ea580c}.dot-green{background:var(--wa-green)}
+
+/* الشاشة الترحيبية */
+.onboard-container{text-align:center;padding:26px 16px 14px}
+.onboard-slide{display:none;animation:fadeIn .3s ease}
+.onboard-slide.active{display:block}
+.onboard-big-heading{font-size:1.45rem;font-weight:800;color:var(--wa-header);line-height:1.6;margin-bottom:16px}
+.onboard-title{font-size:1.08rem;font-weight:700;color:var(--wa-header-sub);line-height:1.7;margin-bottom:12px}
+.onboard-desc{font-size:.92rem;color:var(--muted);line-height:1.95;margin-bottom:24px;padding:0 6px}
+.onboard-dots{display:flex;justify-content:center;gap:6px;margin-bottom:20px}
+.onboard-dot{width:8px;height:8px;border-radius:50%;background:#cbd5e1;transition:all .3s;cursor:pointer;display:inline-block}
+.onboard-dot.active{width:24px;border-radius:4px;background:var(--wa-header)}
+.onboard-footer{display:flex;gap:10px;justify-content:space-between;align-items:center}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+.day-card{background:var(--card);border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid var(--border);position:relative;box-shadow:0 1px 3px rgba(0,0,0,0.03)}
+.day-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.day-title{font-weight:700;font-size:.95rem;color:var(--wa-header-sub)}
+.day-date{background:#f8f9fa;padding:2px 8px;border-radius:10px;font-size:.75rem;color:var(--muted);font-weight:600;border:1px solid var(--border)}
+.day-body-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.day-body-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center}
+.time-btn-cell{background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.82rem;cursor:pointer;font-family:inherit;text-align:center;color:var(--text);font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.time-btn-cell.action{background:#e7fce3;color:var(--wa-green-dark);border:1px dashed var(--wa-green);font-weight:700}
+.time-btn-cell.disabled{background:#f8f9fa;color:var(--text);border-color:var(--border);cursor:default}
+.day-footer{display:flex;gap:6px;align-items:center;border-top:1px dashed var(--border);padding-top:8px;flex-wrap:wrap}
+.ded-btn{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.75rem;cursor:pointer;color:var(--muted);white-space:nowrap;font-family:inherit}
+.ded-btn.comp-active,.ded-btn.otday-active{background:#e7fce3;color:#008069;border-color:#b4e69d;font-weight:700}
+.note-wrapper{flex:1;display:flex;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:3px 6px;gap:6px;min-width:120px}
+.note-inp{flex:1;border:0;outline:0;padding:4px;font-size:.82rem;background:transparent;font-family:inherit;color:var(--text);min-width:30px}
+
+/* زر الإرسال الأسود وعلامتا الصح الرماديتان (ستايل واتساب) */
+.send-bar{position:sticky;bottom:14px;display:flex;justify-content:flex-end;padding:6px 0;z-index:5}
+.send-btn{width:58px;height:58px;border-radius:50%;background:#111b21;border:0;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.35);padding:0;transition:background .2s,transform .1s}
+.send-btn:hover{background:#26343c}
+.send-btn:active{transform:scale(.94)}
+.send-btn svg{display:block}
+.ticks{display:inline-flex;align-items:center;flex-shrink:0;color:#8696a0}
+.ticks svg{display:block}
+
+.sheet{overflow:auto;max-height:72vh;background:#fff;border:1px solid var(--border);border-radius:0 0 8px 8px;width:100%;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.attendance-table{width:100%;border-collapse:collapse;text-align:center;min-width:900px;background:#fff}
+.attendance-table th{background:#f8fafc;color:#334155;font-weight:700;font-size:.88rem;border-bottom:2px solid var(--border);border-right:1px solid var(--border);border-left:1px solid var(--border);padding:12px 10px;position:sticky;top:0;z-index:2}
+.attendance-table td{border-bottom:1px solid var(--border);border-right:1px solid #f1f5f9;border-left:1px solid #f1f5f9;padding:12px 10px;font-size:.9rem;color:#1e293b;background:#fff;white-space:nowrap}
+.attendance-table tbody tr:hover td{background:#f8fafc}
+.pos{color:#059669;font-weight:700}.neg{color:#dc2626;font-weight:700}.mut{color:#94a3b8}
+.row-old td{background:#fef2f2 !important;color:#dc2626 !important;font-weight:600}
+.row-new td{background:#ecfdf5 !important;color:#059669 !important;font-weight:700}
+@keyframes flashHighlight{0%{background-color:#fef08a}100%{background-color:transparent}}
+.highlight-flash{animation:flashHighlight 2.5s ease-out}
+tr.highlight-flash td{animation:flashHighlight 2.5s ease-out}
+
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:8px}
+.modal.on{display:flex}
+.mbox{background:#fff;width:320px;max-width:94vw;border-radius:14px;padding:20px;text-align:center;max-height:94vh;overflow-y:auto}
+.mbox .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+
+.clock-modal{direction:ltr;text-align:left}
+.clock-modal .mbox-title{text-align:center;direction:rtl;font-weight:700;font-size:1.05rem;margin-bottom:12px}
+.clock-display{display:flex;justify-content:center;align-items:center;gap:6px;margin-bottom:15px;background:#f1f5f9;padding:10px;border-radius:8px}
+.clock-disp-num{font-size:1.5rem;font-weight:700;cursor:pointer;padding:2px 8px;border-radius:6px;color:var(--muted)}
+.clock-disp-num.active{color:var(--wa-header);background:#dcf8c6}
+.ampm-container{display:flex;flex-direction:column;gap:3px;margin-left:8px}
+.ampm-btn{border:1px solid var(--border);background:#fff;padding:4px 8px;border-radius:6px;font-size:.78rem;cursor:pointer}
+.ampm-btn.active{background:var(--wa-header);color:#fff;border-color:var(--wa-header)}
+.clock-face-wrap{position:relative;width:200px;height:200px;margin:0 auto 15px;background:#f8f9fa;border-radius:50%;border:1px solid var(--border);user-select:none;cursor:pointer}
+.clock-center{position:absolute;width:6px;height:6px;background:var(--wa-header);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
+.clock-hand{position:absolute;width:2px;height:68px;background:var(--wa-header);bottom:50%;left:50%;transform-origin:bottom center;z-index:4;transform:rotate(0deg)}
+.clock-hand-head{position:absolute;width:28px;height:28px;background:var(--wa-header);border-radius:50%;top:-14px;left:-13px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:bold}
+.clock-digit{position:absolute;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:600;color:var(--text);cursor:pointer;border-radius:50%;transform:translate(-50%,-50%);z-index:3}
+.clock-digit.active{color:#fff;background:var(--wa-header)}
+.clock-digit.tour-target{z-index:8}
+.clock-actions{display:flex;gap:8px;justify-content:flex-end;direction:rtl}
+.clock-hand,.clock-hand-head,.clock-center{pointer-events:none}
+
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);background:#111b21;color:#fff;padding:10px 16px;border-radius:10px;font-size:.85rem;font-weight:700;opacity:0;pointer-events:none;transition:.25s;z-index:2900;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.ae-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.ae-layout > *{min-width:0}
+@media(min-width:900px){.ae-layout{grid-template-columns:340px minmax(0,1fr);align-items:start}}
+.field{margin-bottom:12px;text-align:right}
+.field label{display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:4px}
+.inp{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.9rem;background:#fff;color:var(--text)}
+.inp:focus{outline:2px solid var(--wa-green);border-color:var(--wa-green)}
+.inp[readonly]{cursor:pointer;background:#f8f9fa;font-weight:700}
+.date-row{display:flex;gap:8px}
+.date-row .btn{white-space:nowrap}
+.warn-note{font-size:.75rem;font-weight:600;color:#92400e;background:var(--red-bg);border:1px dashed #e5c94b;border-radius:8px;padding:8px;margin-top:6px}
+.ae-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.ae-head h2{margin:0}
+.ae-sheet{max-height:60vh}
+.job-tag{font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:12px;display:inline-block;background:#f1f5f9;color:#334155;border:1px solid var(--border)}
+
+.mdp-overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;z-index:2000;padding:8px}
+.mdp-card{background:#fff;border-radius:14px;width:100%;max-width:320px;padding:18px;direction:rtl;box-shadow:0 8px 34px rgba(0,0,0,.28)}
+.mdp-title{margin:0 0 12px;text-align:center;font-size:1.05rem;font-weight:700;color:var(--text)}
+.mdp-display{display:flex;align-items:center;justify-content:center;gap:10px;background:#f1f5f9;padding:10px;border-radius:8px;margin-bottom:12px}
+.mdp-chip{border:1px solid var(--border);background:#fff;color:var(--muted);font-family:inherit;font-weight:700;font-size:.8rem;padding:6px 12px;border-radius:8px}
+.mdp-chip.is-active{background:var(--wa-header);color:#fff;border-color:var(--wa-header)}
+.mdp-daybox{font-size:1.4rem;font-weight:700;min-width:56px;text-align:center;padding:2px 10px;border-radius:6px;color:var(--muted)}
+.mdp-daybox.is-active{color:var(--wa-header);background:#dcf8c6}
+.mdp-more-btn{display:block;width:100%;margin-bottom:10px;padding:8px;border:1px dashed var(--wa-green);background:#e7fce3;color:var(--wa-green-dark);border-radius:8px;font-weight:700;font-size:.82rem}
+.mdp-dial{position:relative;width:260px;height:260px;margin:0 auto 14px;border-radius:50%;background:#f8f9fa;border:1px solid var(--border);touch-action:none;user-select:none;-webkit-user-select:none;direction:ltr;cursor:pointer}
+.mdp-hand{position:absolute;left:130px;top:130px;height:2px;margin-top:-1px;background:var(--wa-header);transform-origin:0 50%;pointer-events:none;transition:transform .15s}
+.mdp-center{position:absolute;left:130px;top:130px;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--wa-header);pointer-events:none}
+.mdp-num,.mdp-month-num{position:absolute;transform:translate(-50%,-50%);border:0;border-radius:50%;background:transparent;color:var(--text);font-family:inherit;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0;z-index:3}
+.mdp-num{width:32px;height:32px;font-size:.8rem}
+.mdp-month-num{width:40px;height:40px;font-size:.68rem}
+.mdp-num.is-sel,.mdp-month-num.is-sel{background:var(--wa-header);color:#fff}
+
+/* العرض التفاعلي */
+@keyframes tourPulse{0%{box-shadow:0 0 0 0 rgba(255,152,0,.9)}70%{box-shadow:0 0 0 16px rgba(255,152,0,0)}100%{box-shadow:0 0 0 0 rgba(255,152,0,0)}}
+.tour-target{animation:tourPulse 1.1s infinite;outline:3px solid #ff9800;outline-offset:2px;filter:none !important;opacity:1 !important}
+.tour-fade{filter:blur(1.5px) saturate(.6);opacity:.6;transition:filter .25s,opacity .25s}
+html.tour-on .modal,html.tour-on .mdp-overlay{background:transparent}
+html.tour-on .mbox,html.tour-on .mdp-card{box-shadow:0 8px 34px rgba(0,0,0,.28);border:1px solid var(--border)}
+#tourBubble{position:fixed;z-index:3000;background:#111b21;color:#fff;border-radius:12px;padding:10px 12px 8px;box-shadow:0 6px 24px rgba(0,0,0,.35);font-size:.86rem;line-height:1.7;display:none;direction:rtl;text-align:right;max-height:86vh;overflow-y:auto}
+#tourBubble #tbText{white-space:pre-line}
+#tourBubble .tb-step{font-size:.7rem;color:#25d366;font-weight:700;margin-bottom:2px}
+#tourBubble .tb-foot{display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:8px}
+#tourBubble .tb-stop,#tourBubble .tb-skip{background:transparent;border:0;color:#9fb3bd;font-size:.72rem;text-decoration:underline;padding:2px 4px}
+#tourBubble .tb-next{background:#25d366;color:#053b30;border:0;border-radius:8px;padding:6px 16px;font-weight:700;font-size:.8rem}
+#tourBubble .tb-finish{background:#25d366;color:#053b30;border:0;border-radius:8px;padding:8px 14px;font-weight:700;width:100%}
+#tourBubble .tb-arrow{position:absolute;width:0;height:0;border:7px solid transparent}
+
+/* الطباعة الحرارية 80mm */
+#receiptPrintArea{display:none}
+@page{size:80mm auto;margin:0}
+@media print{
+  body *{visibility:hidden}
+  #receiptPrintArea,#receiptPrintArea *{visibility:visible}
+  #receiptPrintArea{display:block !important;position:absolute;left:0;top:0;width:78mm;margin:0;padding:4mm 2mm;font-family:'Segoe UI',Tahoma,monospace,sans-serif;color:#000;background:#fff;direction:rtl}
+  .receipt-header{text-align:center;border-bottom:2px dashed #000;padding-bottom:6px;margin-bottom:8px}
+  .receipt-header h2{font-size:1.1rem;margin:0 0 4px;color:#000;font-weight:800}
+  .receipt-header p{font-size:.8rem;margin:0;font-weight:700}
+  .receipt-row{display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:5px;font-weight:600}
+  .receipt-divider{border-top:1px dashed #000;margin:6px 0}
+  .receipt-box{border:2px solid #000;padding:6px;text-align:center;margin:8px 0;background:#f8f8f8}
+  .receipt-box .title{font-size:.8rem;font-weight:700}
+  .receipt-box .amount{font-size:1.25rem;font-weight:900}
+  .receipt-footer{text-align:center;font-size:.75rem;margin-top:12px;border-top:1px dashed #000;padding-top:6px}
+  .receipt-sig{display:flex;justify-content:space-between;margin-top:20px;font-size:.75rem;font-weight:700}
+}
+</style>
+</head>
+<body class="wa-chat-bg">
+<div class="wa-app-bar">
+  <div class="wa-user-info">
+    <div class="wa-avatar">ن</div>
+    <div class="wa-names">
+      <h1 id="hTitle">نظام الحضور والفروع</h1>
+      <span id="hSub">تسجيل الدخول</span>
+    </div>
+  </div>
+  <div class="bar-actions">
+    <button class="bar-btn" id="centralSettingsBtn" type="button" style="display:none">الإعدادات العامة</button>
+    <button class="bar-btn" id="notifBellBtn" type="button" style="display:none">الإشعارات <span class="notif-badge" id="notifBadge" style="display:none">0</span></button>
+    <button class="tour-start-btn" id="tourBtn" type="button">الدليل التفاعلي</button>
+    <button class="bar-btn" id="logoutBtn" type="button" style="display:none">خروج</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+<!-- الشاشة التعريفية (Onboarding) -->
+
+
+<div id="sOnboarding" class="screen active">
+
+
+  <div class="card onboard-container">
+
+
+    <div class="onboard-slide active" data-slide="0">
+
+
+      <div class="onboard-big-heading">
+        8 فروع تسجّل من تلفوناتها، وأنت تتابع من مكانك
+      </div>
+
+
+      <div class="onboard-title">
+        كل تسجيل يصل تلقائياً إلى جدول الموظف في جهازك
+      </div>
+
+
+      <div class="onboard-desc">
+        كل مدير فرع يسجل الحضور والانصراف لموظفيه من تلفونه،
+        وتصل التسجيلات تلقائياً إلى جهازك، سطراً بسطر في جدول
+        كل موظف، دون أن تحتاج إلى جمع كشوف الفروع أو إدخال
+        البيانات بنفسك.
+      </div>
+
+
+    </div>
+
+
+    <div class="onboard-slide" data-slide="1">
+
+
+      <div class="onboard-big-heading">
+        الحسابات جاهزة دون مراجعة يدوية لكل موظف
+      </div>
+
+
+      <div class="onboard-title">
+        ساعات العمل والإضافي والنقص تُحسب تلقائياً
+      </div>
+
+
+      <div class="onboard-desc">
+        بمجرد تسجيل الحضور والانصراف، يحسب النظام ساعات
+        العمل الفعلية والإضافي والنقص وفق ساعات الدوام
+        المعتمدة لكل منصب. تجد النتائج جاهزة أمامك
+        بدلاً من الحساب اليدوي ومراجعة الأرقام.
+      </div>
+
+
+    </div>
+
+
+    <div class="onboard-slide" data-slide="2">
+
+
+      <div class="onboard-big-heading">
+        كل الفروع أمامك، وكل تغيير له سجل
+      </div>
+
+
+      <div class="onboard-title">
+        مراجعة مركزية ورواتب واضحة لكل موظف
+      </div>
+
+
+      <div class="onboard-desc">
+        راجع سجلات الفروع وتابع الإضافات والنقل والتعديلات
+        من مكان واحد. يصلك إشعار عند حدوث تغيير، ويمكنك
+        مراجعة التسجيلات والتعليق عليها، والاطلاع على
+        ملخصات الرواتب والاستحقاقات والخصومات لكل موظف.
+      </div>
+
+
+    </div>
+
+
+    <div class="onboard-dots">
+
+
+      <span class="onboard-dot active" data-dot="0"></span>
+      <span class="onboard-dot" data-dot="1"></span>
+      <span class="onboard-dot" data-dot="2"></span>
+
+
+    </div>
+
+
+    <div class="onboard-footer">
+
+
+      <button class="btn" id="onboardSkipBtn" type="button">
+        تخطي
+      </button>
+
+
+      <button class="btn btn-p" id="onboardNextBtn" type="button">
+        التالي ←
+      </button>
+
+
+    </div>
+
+
+  </div>
+
+
+</div>
+
+<!-- 1. تسجيل الدخول -->
+<div id="sLogin" class="screen">
+  <div class="card center">
+    <h2>أدخل الرمز السري (PIN) أو كلمة سر المدير المركزي</h2>
+    <input id="pinInput" class="pin" type="text" autocomplete="off" placeholder="••••">
+    <div class="keypad" id="keypad"></div>
+    <div class="err" id="loginErr"></div>
+    <button class="big" id="loginBtn">دخول للنظام</button>
+    <div class="demo">الفروع (الرمز 1 إلى 8 حسب الترتيب) | المدير المركزي = admin123</div>
+  </div>
+</div>
+
+<!-- 2. الشهر -->
+<div id="sMonth" class="screen">
+  <div class="card center"><h2>اختر الشهر المالي</h2><div class="grid3" id="monthGrid"></div></div>
+</div>
+
+<!-- 3. الشفت -->
+<div id="sShift" class="screen">
+  <div class="nav"><button class="btn" id="shiftBack">تغيير الشهر</button></div>
+  <div class="card center"><h2>الرجاء تحديد شفت العمل</h2>
+    <button class="big" data-shift="morning">شفت صباحي</button>
+    <button class="big" data-shift="evening">شفت مسائي</button>
+  </div>
+</div>
+
+<!-- 4. مدير الفرع: الأيام -->
+<div id="sDays" class="screen">
+  <div class="nav">
+    <button class="btn" id="daysBack">تغيير الشفت</button>
+    <button class="btn btn-p" id="addBranchEmpBtn">إضافة موظف جديد</button>
+    <button class="btn btn-p" id="branchEmpSettingsBtn">إدارة الموظفين والنقل</button>
+  </div>
+  <div class="nav card" style="padding:10px">
+    <button class="btn btn-p" id="wPrev">السابق</button>
+    <b id="wLabel"></b>
+    <button class="btn btn-p" id="wNext">التالي</button>
+  </div>
+  <div class="grid2" id="daysGrid"></div>
+  <div class="demo"><span class="dot dot-red"></span>فارغ &nbsp; <span class="dot dot-orange"></span>غير مؤكد &nbsp; <span class="dot dot-green"></span>مكتمل ومغلق</div>
+</div>
+
+<!-- 5. مدير الفرع: تفاصيل اليوم -->
+<div id="sDay" class="screen">
+  <div class="nav"><button class="btn" id="dayBack">عودة لقائمة الأيام</button></div>
+  <div id="dayList"></div>
+</div>
+
+<!-- 6. المدير المركزي: الفروع -->
+<div id="sBranches" class="screen">
+  <div class="nav">
+    <button class="btn" id="brBack">تغيير الشفت</button>
+    <button class="btn btn-p" id="addEmpBtn">إضافة / إيقاف موظف</button>
+    <button class="btn btn-p" id="alertsBtn">سجل التحركات والتنبيهات</button>
+  </div>
+  <div id="branchList"></div>
+</div>
+
+<!-- 7. المدير المركزي: موظفو الفرع -->
+<div id="sEmps" class="screen">
+  <div class="nav"><button class="btn" id="empBack">عودة للفروع</button></div>
+  <div id="empList"></div>
+</div>
+
+<!-- 8. المدير المركزي: تقرير الموظف -->
+<div id="sSheet" class="screen">
+  <div class="nav" style="margin-bottom:12px">
+    <span class="tag t-orange">وضع إشراف مركزي</span>
+    <button class="btn" id="sheetBack">عودة للموظفين</button>
+  </div>
+  <div class="card" id="sheetHead" style="font-weight:bold;font-size:.95rem;color:#334155;margin-bottom:12px"></div>
+  <div id="sheetAlert"></div>
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-print" id="printReceiptBtn" style="font-weight:700">طباعة كشف الراتب</button>
+      <button class="btn btn-p" id="toggleSalaryBtn" style="font-weight:700">إعدادات الراتب</button>
+      <button class="btn btn-p" id="toggleSummaryBtn" style="font-weight:700">عرض ملخص الإجماليات</button>
+      <button class="btn btn-p" id="changeRoleBtn" style="font-weight:700">تغيير المنصب</button>
+      <button class="btn btn-danger" id="suspendEmpBtn" style="font-weight:700">إيقاف الموظف</button>
+    </div>
+  </div>
+  <div class="card" id="rolePanel" style="display:none;margin-bottom:12px;background:#f8fafc">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="font-size:.9rem;font-weight:700;color:var(--wa-header)">المنصب الجديد:</div>
+      <select id="roleSelectInput" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-weight:700;font-size:.9rem;background:#fff">
+        <option value="cashier">كاشير</option><option value="barista">باريستا</option><option value="staff">موظف</option>
+      </select>
+      <button class="btn btn-p" id="updateRoleBtn" style="padding:6px 14px">تأكيد تغيير المنصب</button>
+    </div>
+  </div>
+  <div class="card" id="salaryPanel" style="display:none;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="font-size:.9rem;font-weight:700;color:var(--wa-header)">الراتب الأساسي للشهر:</div>
+      <input type="number" id="salaryInput" value="6000" style="width:110px;padding:6px;border:1px solid var(--border);border-radius:6px;font-weight:700;text-align:center;font-size:.9rem">
+      <span style="font-size:.85rem;color:var(--muted)">جنيه</span>
+      <button class="btn btn-p" id="updateSalaryBtn" style="padding:6px 14px">حفظ التحديث</button>
+    </div>
+  </div>
+  <div class="card" id="summaryPanel" style="display:none;margin-bottom:12px;background:#f8fafc"><div id="summaryPanelContent"></div></div>
+  <div id="sheetContainer" style="display:flex;flex-direction:column;gap:16px"></div>
+</div>
+
+<!-- 8.5 المدير المركزي: إدارة الموظفين -->
+<div id="sAddEmp" class="screen">
+  <div class="nav"><button class="btn" id="aeBack">عودة للفروع</button><span class="tag t-orange">وضع إشراف مركزي</span></div>
+  <div class="ae-layout">
+    <div class="card">
+      <h2>إضافة موظف جديد</h2>
+      <div class="field"><label for="aeName">اسم الموظف الكامل</label><input id="aeName" class="inp" type="text" placeholder="أدخل اسم الموظف" autocomplete="off"></div>
+      <div class="field"><label for="aeJob">المسمى الوظيفي (المنصب)</label><select id="aeJob" class="inp"></select></div>
+      <div class="grid2">
+        <div class="field"><label for="aeBranch">الفرع</label><select id="aeBranch" class="inp"></select></div>
+        <div class="field"><label for="aeShift">الشفت</label><select id="aeShift" class="inp"></select></div>
+      </div>
+      <div class="field">
+        <label for="aeHireText">تاريخ التعيين (يوم المباشرة)</label>
+        <div class="date-row"><input id="aeHireText" class="inp" type="text" readonly placeholder="اختر التاريخ"><button type="button" class="btn btn-p" id="aeHireBtn">اختيار</button></div>
+        <div class="warn-note">تنبيه: لن يظهر الموظف في جداول الأيام التي تسبق تاريخ تعيينه.</div>
+      </div>
+      <button class="big" id="aeAddBtn" type="button">إضافة الموظف للنظام</button>
+    </div>
+    <div class="card">
+      <div class="ae-head"><h2>إدارة الموظفين والسجلات</h2><span class="tag t-green" id="aeCount"></span></div>
+      <div class="sheet ae-sheet"><table class="attendance-table">
+        <thead><tr><th>الموظف</th><th>المنصب الحالي</th><th>الفرع / الشفت</th><th>تاريخ التعيين</th><th>الحالة</th><th>الإجراءات المركزية</th></tr></thead>
+        <tbody id="aeTbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- 9. التنبيهات -->
+<div id="sAlerts" class="screen">
+  <div class="nav"><button class="btn" id="alertsBack">عودة للفروع</button></div>
+  <div id="alertList"></div>
+</div>
+
+</div>
+
+<!-- نافذة إدارة موظفي الفرع -->
+<div class="modal" id="branchEmpModal"><div class="mbox" style="width:400px">
+  <b>إدارة موظفي الفرع</b>
+  <div style="margin:12px 0;text-align:right;max-height:300px;overflow-y:auto" id="branchEmpsListForManage"></div>
+  <button class="btn" id="closeBranchEmpModal" style="width:100%">إغلاق</button>
+</div></div>
+
+<!-- نافذة إضافة موظف من مدير الفرع -->
+<div class="modal" id="branchAddModal"><div class="mbox" style="width:360px;text-align:right">
+  <b style="display:block;text-align:center;margin-bottom:12px">إضافة موظف جديد للفرع</b>
+  <div class="field"><label for="beName">اسم الموظف الكامل</label><input id="beName" class="inp" type="text" placeholder="أدخل اسم الموظف" autocomplete="off"></div>
+  <div class="field"><label for="beRole">المسمى الوظيفي</label><select id="beRole" class="inp"></select></div>
+  <div class="field"><label for="beShift">الشفت</label><select id="beShift" class="inp"></select></div>
+  <div class="field">
+    <label for="beHireText">تاريخ التعيين (يوم المباشرة)</label>
+    <div class="date-row"><input id="beHireText" class="inp" type="text" readonly placeholder="اختر التاريخ"><button type="button" class="btn btn-p" id="beHireBtn">اختيار</button></div>
+    <div class="warn-note">تنبيه: لن يظهر الموظف في جداول الأيام التي تسبق تاريخ تعيينه.</div>
+  </div>
+  <button class="big" id="beAddBtn" type="button">إضافة الموظف للفرع</button>
+  <button class="btn" id="beClose" type="button" style="width:100%">إغلاق</button>
+</div></div>
+
+<!-- نافذة إزالة موظف -->
+<div class="modal" id="branchRemoveEmpModal"><div class="mbox" style="width:340px">
+  <b style="color:var(--red)">تأكيد إزالة / استبعاد الموظف من الفرع</b>
+  <div style="margin:12px 0;text-align:right">
+    <p id="branchRemoveEmpNameLabel" style="font-weight:700;margin-bottom:8px"></p>
+    <div style="font-size:.8rem;color:var(--muted);line-height:1.5">سيتم إيقاف الموظف واستبعاده من جداول الحضور ابتداءً من اليوم مع إبلاغ المدير المركزي تلقائياً.</div>
+  </div>
+  <button class="btn btn-danger" id="confirmBranchRemoveEmpBtn" style="width:100%;padding:10px;margin-bottom:8px">تأكيد الإزالة الآن</button>
+  <button class="btn" id="closeBranchRemoveEmpModal" style="width:100%">إلغاء</button>
+</div></div>
+
+<!-- نافذة نقل موظف -->
+<div class="modal" id="transferModal"><div class="mbox" style="width:360px">
+  <b>نقل موظف إلى فرع آخر</b>
+  <div style="margin:12px 0;text-align:right">
+    <p id="transferEmpNameLabel" style="font-weight:700;margin-bottom:8px"></p>
+    <label style="font-size:.85rem;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">إلى الفرع:</label>
+    <select id="targetBranchSelect" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;margin-bottom:10px;background:#fff"></select>
+    <label style="font-size:.85rem;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">تاريخ النقل (ابتداءً من اليوم):</label>
+    <input type="number" id="transferDayInput" min="1" max="31" value="15" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;margin-bottom:14px">
+  </div>
+  <button class="btn btn-p" id="confirmTransferBtn" style="width:100%;padding:10px;margin-bottom:8px">اعتماد النقل</button>
+  <button class="btn" id="closeTransferModal" style="width:100%">إلغاء</button>
+</div></div>
+
+<!-- الإعدادات العامة -->
+<div class="modal" id="centralSettingsModal"><div class="mbox" style="width:420px">
+  <b>الإعدادات العامة المركزية للنظام</b>
+  <div style="margin:12px 0;text-align:right;max-height:360px;overflow-y:auto;padding-left:4px">
+    <div class="card" style="padding:10px;margin-bottom:10px">
+      <label style="font-size:.85rem;font-weight:700;color:var(--wa-header);display:block;margin-bottom:4px">عدد أيام الإجازة السنوية المعتمدة:</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="annualVacationInput" style="width:80px;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;text-align:center;font-weight:bold">
+        <span style="font-size:.8rem;color:var(--muted)">يوم سنوياً</span>
+      </div>
+    </div>
+    <div class="card" style="padding:10px;margin-bottom:10px">
+      <label style="font-size:.85rem;font-weight:700;color:var(--wa-header);display:block;margin-bottom:8px">الرواتب الأساسية المعتمدة حسب المنصب:</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
+        <div><small style="display:block;font-weight:700;color:var(--muted)">كاشير</small><input type="number" id="baseSalaryCashier" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;text-align:center;font-weight:bold"></div>
+        <div><small style="display:block;font-weight:700;color:var(--muted)">باريستا</small><input type="number" id="baseSalaryBarista" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;text-align:center;font-weight:bold"></div>
+        <div><small style="display:block;font-weight:700;color:var(--muted)">موظف</small><input type="number" id="baseSalaryStaff" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;text-align:center;font-weight:bold"></div>
+      </div>
+      <small style="display:block;margin-top:6px;color:#ea580c;font-size:.75rem">تنبيه: سيؤدي الحفظ لتحديث رواتب كافة الموظفين فوراً.</small>
+    </div>
+    <div class="card" style="padding:10px;margin-bottom:10px">
+      <label style="font-size:.85rem;font-weight:700;color:var(--wa-header);display:block;margin-bottom:6px">إدارة التارجت الموحد للفرع حسب الشهر:</label>
+      <div style="margin-bottom:8px"><label style="font-size:.75rem;font-weight:700;color:var(--muted)">الفرع المستهدف:</label>
+        <select id="targetBranchSelectInput" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:#fff"></select></div>
+      <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;background:#f8fafc;padding:6px 10px;border-radius:6px;border:1px solid var(--border)">
+        <span style="font-size:.8rem;font-weight:700">الشهر المالي المستهدف:</span>
+        <button type="button" class="btn btn-p" id="targetMonthDialBtn" style="padding:4px 10px;font-size:.8rem">أكتوبر (اضغط للتغيير)</button>
+      </div>
+      <div><label style="font-size:.75rem;font-weight:700;color:var(--muted)">مبلغ التارجت الموحد للفرع (جنيه):</label>
+        <input type="number" id="targetAmountInput" placeholder="أدخل التارجت الموحد..." style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;font-weight:bold"></div>
+      <button type="button" class="btn btn-p" id="saveBranchTargetBtn" style="width:100%;padding:8px;margin-top:8px;font-size:.8rem">حفظ التارجت للفرع والشهر</button>
+    </div>
+  </div>
+  <button class="btn btn-p" id="saveCentralSettingsBtn" style="width:100%;padding:10px;margin-bottom:8px">حفظ كافة الإعدادات العامة</button>
+  <button class="btn" id="closeCentralSettingsModal" style="width:100%">إغلاق</button>
+</div></div>
+
+<!-- تعليق مركزي -->
+<div class="modal" id="commentModal"><div class="mbox" style="width:360px">
+  <b>إرسال ملاحظة / تعليق لمدير الفرع</b>
+  <div style="margin:12px 0;text-align:right">
+    <p id="commentInfoLabel" style="font-weight:700;font-size:.85rem;color:var(--muted);margin-bottom:8px"></p>
+    <textarea id="centralCommentInput" placeholder="اكتب الملاحظة أو التعديل المطلوب هنا..." rows="3" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;font-family:inherit;resize:none"></textarea>
+  </div>
+  <button class="btn btn-p" id="sendCommentBtn" style="width:100%;padding:10px;margin-bottom:8px">إرسال الإشعار الفوري</button>
+  <button class="btn" id="closeCommentModal" style="width:100%">إلغاء</button>
+</div></div>
+
+<!-- الإشعارات -->
+<div class="modal" id="notifModal"><div class="mbox" style="width:400px">
+  <b>علبة الإشعارات والتنبيهات</b>
+  <div style="margin:12px 0;text-align:right;max-height:285px;overflow-y:auto" id="notifListContainer"></div>
+  <button class="btn" id="closeNotifModal" style="width:100%">إغلاق</button>
+</div></div>
+
+<!-- اختيار عام -->
+<div class="modal" id="pickModal"><div class="mbox">
+  <b id="pickTitle"></b><div class="opts" id="pickOpts"></div>
+  <button class="btn" id="pickCancel" style="width:100%">إلغاء</button>
+</div></div>
+
+<!-- إيقاف موظف -->
+<div class="modal" id="suspendModal"><div class="mbox" style="width:340px">
+  <b style="color:var(--red)">تأكيد إيقاف الموظف عن العمل</b>
+  <div style="margin:12px 0;text-align:right">
+    <p id="suspendEmpNameLabel" style="font-weight:700;margin-bottom:8px"></p>
+    <label style="font-size:.85rem;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">تاريخ الإيقاف (ابتداءً من اليوم):</label>
+    <input type="text" id="suspendDateInput" readonly style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;margin-bottom:14px;background:#f8f9fa;font-weight:700">
+  </div>
+  <button class="btn btn-danger" id="confirmSuspendBtn" style="width:100%;padding:10px;margin-bottom:8px">تأكيد الإيقاف النهائي</button>
+  <button class="btn" id="closeSuspendModal" style="width:100%">إلغاء</button>
+</div></div>
+
+<!-- الساعة الدائرية -->
+<div class="modal" id="timeModal">
+  <div class="mbox clock-modal" style="width:315px">
+    <div class="mbox-title" id="timeTitle">اختر الوقت</div>
+    <div class="clock-display">
+      <span class="clock-disp-num active" id="dispHour">12</span>
+      <span style="font-size:1.4rem;font-weight:bold;color:var(--muted)">:</span>
+      <span class="clock-disp-num" id="dispMin">00</span>
+      <div class="ampm-container">
+        <button class="ampm-btn active" id="btnAM" type="button">ص</button>
+        <button class="ampm-btn" id="btnPM" type="button">م</button>
+      </div>
+    </div>
+    <div class="clock-face-wrap" id="clockFaceWrap">
+      <div class="clock-center"></div>
+      <div class="clock-hand" id="clockHand"><div class="clock-hand-head" id="handVal">12</div></div>
+      <div id="digitsWrap"></div>
+    </div>
+    <div class="clock-actions">
+      <button class="btn" id="timeCancel" style="padding:6px 12px">إلغاء</button>
+      <button class="btn btn-p" id="timeOk" style="padding:6px 12px">حسناً</button>
+    </div>
+  </div>
+</div>
+
+<div id="receiptPrintArea"></div>
+<div id="toast"></div>
+<div id="tourBubble">
+  <div class="tb-arrow" id="tbArrow"></div>
+  <div class="tb-step" id="tbStep"></div>
+  <div id="tbText"></div>
+  <div class="tb-foot">
+    <button type="button" class="tb-stop" id="tbStop">إيقاف الدليل</button>
+    <button type="button" class="tb-skip" id="tbSkip" style="display:none">تخطي الخطوة</button>
+    <button type="button" class="tb-next" id="tbNext" style="display:none">التالي</button>
+    <button type="button" class="tb-finish" id="tbFinish" style="display:none">إنهاء الدليل</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const DAY_NAMES = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+const MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const SHIFTS = { morning: "صباحي", evening: "مسائي" };
+const SHIFT_DEFAULT = { morning: { tin: "08:00", tout: "16:00" }, evening: { tin: "16:30", tout: "02:00" } };
+const BASE = { cashier: 8, barista: 8, staff: 10 };
+const BASE_SAL = { cashier: 6000, barista: 6500, staff: 5500 };
+const ROLE_TEXT = { cashier: "كاشير", barista: "باريستا", staff: "موظف" };
+const STATUS_TEXT = { work: "عمل", weekly: "إجازة أسبوعية", sick: "إذن مرضي", absent: "غياب" };
+const DED_TEXT = { 0: "بدون", 0.25: "ربع يوم", 0.5: "نصف يوم", 1: "يوم كامل", 2: "يومان", 3: "3 أيام", 4: "4 أيام", 5: "5 أيام", 6: "6 أيام" };
+const CENTRAL_PASSWORD = "admin123";
+const STORE_KEY = "attendance_proto_v14_wa_send";
+const TICKS_SVG = '<svg width="18" height="12" viewBox="0 0 18 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 6.5 4.5 10 11 2"></polyline><polyline points="6.5 9.8 7.3 10.5 14.5 2"></polyline></svg>';
+const SEND_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path transform="translate(24 0) scale(-1 1)" d="M2 21l21-9L2 3v7l15 2-15 2z"></path></svg>';
+const BRANCH_NAMES = ["الصنادلي","ميدان لبنان","مراد","حسن محمد","رمسيس","المريوطية","العشرين","البحوث"];
+const tour = { on: false, i: 0, cnt: 0, target: null, backup: null, timer: null, scrolledFor: -1, miss: 0 };
+
+function notify(msg){
+  const t = $("toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(notify._t); notify._t = setTimeout(() => t.classList.remove("on"), 2400);
+}
+
+let memStore = null;
+function seed(){
+  const F = ["محمد","أحمد","محمود","خالد","يوسف","مصطفى","عمر","كريم"];
+  const L = ["عبد الله","علي","سعيد","حسن"];
+  let n = 0;
+  const branches = [];
+  BRANCH_NAMES.forEach((name, idx) => {
+    const emps = [];
+    [["morning","cashier"],["morning","barista"],["evening","staff"],["evening","cashier"]].forEach(([shift, role]) => {
+      emps.push({ id: "e" + (idx+1) + "_" + n, name: F[n % 8] + " " + L[Math.floor(n / 8) % 4], role, shift, salary: BASE_SAL[role], start: "2026-01-01", end: null, suspended: false, transfers: [] });
+      n++;
+    });
+    branches.push({ id: "b" + (idx + 1), name, pin: String(idx + 1).repeat(4), emps });
+  });
+  return { branches, rec: {}, oldRec: {}, closed: {}, audit: [], notifications: [],
+    settings: { annualVacation: 21, baseSalaries: Object.assign({}, BASE_SAL), branchTargets: {} } };
+}
+function load(){
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY));
+    if (s && s.branches && s.branches.length > 0) {
+      if (!s.oldRec) s.oldRec = {};
+      if (!s.notifications) s.notifications = [];
+      if (!s.settings) s.settings = { annualVacation: 21, baseSalaries: Object.assign({}, BASE_SAL), branchTargets: {} };
+      s.branches.forEach(b => b.emps.forEach(e => { if (!e.transfers) e.transfers = []; if (e.suspended === undefined) e.suspended = false; }));
+      return s;
+    }
+  } catch (e) {}
+  return memStore || seed();
+}
+function save(){
+  if (tour.on) return;
+  memStore = S;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+}
+let S = load();
+
+const now = new Date();
+const session = { role: null, branch: null, shift: null, year: 2026, month: now.getFullYear() === 2026 ? now.getMonth() : 9, week: 0, day: 1, empId: null };
+const ym = () => session.year + "-" + session.month;
+const rk = (empId, day) => empId + "|" + ym() + "|" + day;
+const ck = (bId, shift, day) => bId + "|" + shift + "|" + ym() + "|" + day;
+const daysIn = () => new Date(session.year, session.month + 1, 0).getDate();
+const isoDay = day => session.year + "-" + String(session.month + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+const dayName = day => DAY_NAMES[new Date(session.year, session.month, day).getDay()];
+const branchOf = id => S.branches.find(b => b.id === id);
+const myBranch = () => branchOf(session.branch);
+const pad2 = n => String(n).padStart(2, "0");
+function todayIso(){ const d = new Date(); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+function fmtDate(iso){ if (!iso) return "--"; const p = iso.split("-").map(Number); return p[2] + " " + MONTHS[p[1] - 1] + " " + p[0]; }
+function findEmp(id){ for (const br of S.branches){ const e = br.emps.find(x => x.id === id); if (e) return { emp: e, br }; } return null; }
+function logAudit(text){ S.audit.push({ id: Date.now() + Math.random(), text }); }
+function pushNotif(o){
+  S.notifications.push(Object.assign({ id: "n" + Date.now() + "_" + Math.floor(Math.random() * 1e6), read: false, time: new Date().toLocaleString("ar-EG") }, o));
+}
+
+function holderOf(emp){ for (const br of S.branches){ if (br.emps.some(e => e.id === emp.id)) return br.id; } return null; }
+function tKey(t){ const p = String(t.ym).split("-").map(Number); return (p[0] * 12 + p[1]) * 100 + t.day; }
+function isEmpInBranchOnDay(emp, bId, day){
+  if (emp.suspended && emp.end && isoDay(day) >= emp.end) return false;
+  const trs = (emp.transfers || []).slice().sort((a, b) => tKey(a) - tKey(b));
+  let activeB = trs.length ? trs[0].fromBranch : holderOf(emp);
+  const cur = (session.year * 12 + session.month) * 100 + day;
+  trs.forEach(t => { if (tKey(t) <= cur) activeB = t.toBranch; });
+  return activeB === bId;
+}
+function activeEmps(bId, shift, day){
+  return S.branches.flatMap(b => b.emps).filter(e => e.shift === shift && isEmpInBranchOnDay(e, bId, day) && (!e.start || e.start <= isoDay(day)));
+}
+function esc(s){ return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function toMin(t){ if (!t) return null; const p = t.split(":").map(Number); return p[0] * 60 + p[1]; }
+function fmt(min){ const sign = min < 0 ? "-" : ""; const a = Math.abs(Math.round(min)); return sign + Math.floor(a / 60) + ":" + String(a % 60).padStart(2, "0"); }
+function tView(t){
+  if (!t) return "--:--";
+  const p = t.split(":").map(Number); let h = p[0] % 12; if (h === 0) h = 12;
+  return pad2(h) + ":" + pad2(p[1]) + " " + (p[0] >= 12 ? "م" : "ص");
+}
+function calcDay(d, base){
+  const baseMin = base * 60;
+  let worked = false, tot = 0, ot = 0, sh = 0;
+  if (d && d.status === "work" && d.tin && d.tout) {
+    worked = true;
+    const a = toMin(d.tin), b = toMin(d.tout);
+    tot = (b < a ? b + 1440 : b) - a;
+    const diff = tot - baseMin;
+    ot = Math.max(diff, 0); sh = Math.max(-diff, 0);
+  }
+  const extra = d ? (d.extra || 0) * baseMin : 0;
+  const comp = d ? (d.comp || 0) * 60 : 0;
+  return { worked, tot, ot: ot + extra + comp, sh, dedDays: d ? (d.ded || 0) : 0 };
+}
+function monthStats(emp){
+  const base = BASE[emp.role];
+  let wDays = 0, ot = 0, sh = 0, ded = 0;
+  for (let d = 1; d <= daysIn(); d++){
+    const rec = S.rec[rk(emp.id, d)]; if (!rec) continue;
+    const r = calcDay(rec, base);
+    if (r.worked) wDays++;
+    ot += r.ot; sh += r.sh; ded += r.dedDays;
+  }
+  const salary = emp.salary || 6000;
+  const dedVal = ded * (salary / 30);
+  return { base, wDays, ot, sh, ded, salary, dedVal, net: salary - dedVal };
+}
+function branchTarget(bId){
+  const v = S.settings.branchTargets[bId + "_" + session.year + "-" + session.month];
+  return v ? v : null;
+}
+
+function show(id, title, sub){
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  $(id).classList.add("active");
+  if (title) $("hTitle").textContent = title;
+  if (sub !== undefined) $("hSub").textContent = sub;
+  window.scrollTo(0, 0);
+  updateNotifBadge();
+}
+function ctx(){ return MONTHS[session.month] + " " + session.year + (session.shift ? " - " + SHIFTS[session.shift] : ""); }
+
+(function buildKeypad(){
+  const k = $("keypad");
+  ["1","2","3","4","5","6","7","8","9","مسح","0","←"].forEach(t => {
+    const b = document.createElement("button"); b.textContent = t; b.type = "button";
+    b.onclick = () => {
+      const i = $("pinInput");
+      if (t === "مسح") i.value = ""; else if (t === "←") i.value = i.value.slice(0, -1); else i.value += t;
+    };
+    k.appendChild(b);
+  });
+})();
+
+/* ---------- الشاشة الترحيبية ---------- */
+let currentOnboardSlide = 0;
+const totalOnboardSlides = 3;
+function showOnboardSlide(idx){
+  currentOnboardSlide = idx;
+  document.querySelectorAll(".onboard-slide").forEach((s, i) => s.classList.toggle("active", i === idx));
+  document.querySelectorAll(".onboard-dot").forEach((d, i) => d.classList.toggle("active", i === idx));
+  $("onboardNextBtn").textContent = (idx === totalOnboardSlides - 1) ? "ابدأ الآن" : "التالي ←";
+}
+function finishOnboarding(){
+  show("sLogin", "نظام الحضور والفروع", "تسجيل الدخول");
+}
+$("onboardNextBtn").onclick = () => {
+  if (currentOnboardSlide < totalOnboardSlides - 1) showOnboardSlide(currentOnboardSlide + 1);
+  else finishOnboarding();
+};
+$("onboardSkipBtn").onclick = finishOnboarding;
+document.querySelectorAll(".onboard-dot").forEach((dot, idx) => { dot.onclick = () => showOnboardSlide(idx); });
+
+function doLogin(){
+  const v = $("pinInput").value.trim();
+  $("pinInput").value = "";
+  if (v === CENTRAL_PASSWORD) { session.role = "central"; session.branch = null; }
+  else {
+    const b = S.branches.find(x => x.pin === v);
+    if (!b) { $("loginErr").textContent = "الرمز غير صحيح، حاول مرة أخرى"; return; }
+    session.role = "branch"; session.branch = b.id;
+  }
+  $("loginErr").textContent = "";
+  document.body.classList.toggle("central", session.role === "central");
+  $("logoutBtn").style.display = "";
+  $("notifBellBtn").style.display = "";
+  $("centralSettingsBtn").style.display = session.role === "central" ? "" : "none";
+  goMonth();
+}
+$("loginBtn").onclick = doLogin;
+$("pinInput").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+$("logoutBtn").onclick = () => {
+  session.role = null; session.branch = null; session.shift = null;
+  document.body.classList.remove("central");
+  $("logoutBtn").style.display = "none"; $("notifBellBtn").style.display = "none"; $("centralSettingsBtn").style.display = "none";
+  show("sLogin", "نظام الحضور والفروع", "تسجيل الدخول");
+};
+
+function goMonth(){
+  const g = $("monthGrid"); g.innerHTML = "";
+  MONTHS.forEach((m, i) => {
+    const b = document.createElement("button");
+    b.className = "btn" + (i === session.month ? " btn-p" : ""); b.style.padding = "16px 6px"; b.textContent = m;
+    b.onclick = () => { session.month = i; session.week = 0; goShift(); };
+    g.appendChild(b);
+  });
+  show("sMonth", session.role === "central" ? "المدير المركزي" : myBranch().name, "اختر الشهر المالي");
+}
+function goShift(){ show("sShift", session.role === "central" ? "المدير المركزي" : myBranch().name, MONTHS[session.month] + " " + session.year); }
+$("shiftBack").onclick = goMonth;
+document.querySelectorAll("[data-shift]").forEach(b => b.onclick = () => {
+  session.shift = b.dataset.shift;
+  session.role === "central" ? goBranches() : goDays();
+});
+
+function dayState(bId, shift, day){
+  if (S.closed[ck(bId, shift, day)]) return "green";
+  return activeEmps(bId, shift, day).some(e => S.rec[rk(e.id, day)]) ? "orange" : "red";
+}
+function goDays(){
+  const n = daysIn(), start = session.week * 7 + 1, end = Math.min(start + 6, n);
+  $("wLabel").textContent = "الأيام " + start + " إلى " + end;
+  const g = $("daysGrid"); g.innerHTML = "";
+  const T = { red: ["فارغ", "t-red"], orange: ["غير مؤكد", "t-orange"], green: ["مكتمل ومغلق", "t-green"] };
+  for (let d = start; d <= end; d++) {
+    const st = dayState(session.branch, session.shift, d);
+    const c = document.createElement("div");
+    c.className = "dcard " + (st === "red" ? "" : st);
+    c.innerHTML = "<b>" + dayName(d) + " " + d + "/" + (session.month + 1) + "</b><span class='tag " + T[st][1] + "'>" + T[st][0] + "</span>";
+    c.onclick = () => goDay(d);
+    g.appendChild(c);
+  }
+  show("sDays", myBranch().name, ctx());
+}
+$("wPrev").onclick = () => { if (session.week > 0) { session.week--; goDays(); } };
+$("wNext").onclick = () => { if ((session.week + 1) * 7 < daysIn()) { session.week++; goDays(); } };
+$("daysBack").onclick = goShift;
+
+/* ---------- إدارة موظفي الفرع: نقل وإزالة ---------- */
+let currentTransferEmpId = null, pendingBranchRemoveEmpId = null;
+$("branchEmpSettingsBtn").onclick = () => { renderBranchEmpsList(); $("branchEmpModal").classList.add("on"); };
+$("closeBranchEmpModal").onclick = () => $("branchEmpModal").classList.remove("on");
+function renderBranchEmpsList(){
+  const b = myBranch(); let h = "";
+  b.emps.filter(e => !e.suspended).forEach(e => {
+    h += `<div style="display:flex;justify-content:space-between;align-items:center;background:#f8fafc;padding:8px;border-radius:6px;margin-bottom:6px;font-size:.85rem;gap:6px;flex-wrap:wrap">
+      <div><b>esc(e.name)</b><smallclass="mut">({ROLE_TEXT[e.role]} - ${SHIFTS[e.shift]})</small></div>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-p" style="padding:4px 8px;font-size:.75rem" data-transfer="${e.id}">نقل لفرع آخر</button>
+        <button class="btn btn-danger" style="padding:4px 8px;font-size:.75rem" data-remove="${e.id}">إزالة الموظف</button>
+      </div></div>`;
+  });
+  $("branchEmpsListForManage").innerHTML = h || "<div class='mut'>لا يوجد موظفون نشطون مسجلون بهذا الفرع</div>";
+}
+$("branchEmpsListForManage").addEventListener("click", ev => {
+  const t = ev.target.closest("[data-transfer]"), r = ev.target.closest("[data-remove]");
+  if (t) openTransferModal(t.dataset.transfer);
+  else if (r) openRemoveModal(r.dataset.remove);
+});
+function openTransferModal(empId){
+  currentTransferEmpId = empId;
+  const b = myBranch(), emp = b.emps.find(x => x.id === empId); if (!emp) return;
+  $("transferEmpNameLabel").textContent = "نقل الموظف: " + emp.name;
+  ("targetBranchSelect").innerHTML=S.branches.filter(br=>br.id!==b.id).map(br=>`<optionvalue="{br.id}">${esc(br.name)}</option>`).join("");
+  $("branchEmpModal").classList.remove("on");
+  $("transferModal").classList.add("on");
+}
+$("closeTransferModal").onclick = () => { $("transferModal").classList.remove("on"); $("branchEmpModal").classList.add("on"); };
+$("confirmTransferBtn").onclick = () => {
+  const targetBId = $("targetBranchSelect").value;
+  let transferDay = parseInt($("transferDayInput").value, 10) || 15;
+  transferDay = Math.min(Math.max(transferDay, 1), daysIn());
+  const b = myBranch(), empIdx = b.emps.findIndex(x => x.id === currentTransferEmpId);
+  if (empIdx === -1) return;
+  const emp = b.emps[empIdx];
+  emp.transfers.push({ fromBranch: b.id, toBranch: targetBId, day: transferDay, ym: ym() });
+  const tb = branchOf(targetBId);
+  tb.emps.push(emp); b.emps.splice(empIdx, 1);
+  const txt = `تم نقل الموظف ${emp.name} من ${b.name} إلى ${tb.name} ابتداءً من ${transferDay} ${MONTHS[session.month]}`;
+  logAudit(txt);
+  pushNotif({ kind: "info", senderRole: "branch", senderName: b.name, recipientRole: "central", text: txt, year: session.year, month: session.month, shift: emp.shift, branchId: tb.id, empId: emp.id, day: transferDay });
+  save();
+  $("transferModal").classList.remove("on");
+  notify("تم نقل الموظف بنجاح من الفرع الحالي إلى الفرع الجديد");
+  goDays();
+};
+function openRemoveModal(empId){
+  const emp = myBranch().emps.find(x => x.id === empId); if (!emp) return;
+  pendingBranchRemoveEmpId = empId;
+  $("branchRemoveEmpNameLabel").textContent = "الموظف المراد إزالته: " + emp.name + " (" + ROLE_TEXT[emp.role] + ")";
+  $("branchEmpModal").classList.remove("on");
+  $("branchRemoveEmpModal").classList.add("on");
+}
+$("closeBranchRemoveEmpModal").onclick = () => { $("branchRemoveEmpModal").classList.remove("on"); $("branchEmpModal").classList.add("on"); };
+$("confirmBranchRemoveEmpBtn").onclick = () => {
+  const b = myBranch(), emp = b.emps.find(x => x.id === pendingBranchRemoveEmpId);
+  if (!emp) return;
+  emp.suspended = true; emp.end = todayIso();
+  const txt = `قام مدير فرع ${b.name} بإزالة واستبعاد الموظف ${emp.name} من الفرع ابتداءً من ${fmtDate(todayIso())}`;
+  logAudit(txt);
+  pushNotif({ kind: "info", senderRole: "branch", senderName: b.name, recipientRole: "central", text: txt, year: session.year, month: session.month, shift: emp.shift, branchId: b.id, empId: emp.id, day: 1 });
+  save();
+  $("branchRemoveEmpModal").classList.remove("on");
+  notify("تمت إزالة الموظف واستبعاده من كشوفات الفرع");
+  goDays();
+};
+
+/* ---------- المنتقي الدائري للتاريخ ---------- */
+const MDP = (function(){
+  const SIZE = 260, C = SIZE / 2, R = 100;
+  const dim = (m, y) => new Date(y, m, 0).getDate();
+  function open(o){
+    let year = o.year, month = o.month, day = o.day, step = "month", more = day > 15;
+    const overlay = document.createElement("div"); overlay.className = "mdp-overlay";
+    const card = document.createElement("div"); card.className = "mdp-card";
+    overlay.appendChild(card); document.body.appendChild(overlay);
+    const onKey = e => { if (e.key === "Escape") close(); };
+    function close(){ document.removeEventListener("keydown", onKey); overlay.remove(); }
+    document.addEventListener("keydown", onKey);
+    overlay.addEventListener("mousedown", e => { if (e.target === overlay) close(); });
+    const range = () => { const lo = more ? 16 : 1, hi = more ? dim(month, year) : 15; return { lo, count: hi - lo + 1 }; };
+
+    function updateDial(){
+      const dial = card.querySelector(".mdp-dial"), hand = dial.querySelector(".mdp-hand");
+      let a;
+      if (step === "day") {
+        const r = range();
+        dial.querySelectorAll(".mdp-num").forEach(n => n.classList.toggle("is-sel", +n.dataset.day === day));
+        a = ((day - r.lo) / r.count) * 2 * Math.PI - Math.PI / 2;
+        card.querySelector(".mdp-daybox").textContent = day;
+        card.querySelector(".mdp-more-btn").textContent = more ? "العودة (1 - 15)" : "أكثر (16 - " + dim(month, year) + ")";
+      } else {
+        dial.querySelectorAll(".mdp-month-num").forEach(n => n.classList.toggle("is-sel", +n.dataset.month === month));
+        a = ((month - 1) / 12) * 2 * Math.PI - Math.PI / 2;
+        const db = card.querySelector(".mdp-daybox"); if (db) db.textContent = MONTHS[month - 1];
+      }
+      hand.style.width = R + "px";
+      hand.style.transform = "rotate(" + a + "rad)";
+      card.querySelector(".mdp-chip").textContent = MONTHS[month - 1];
+    }
+    function pickAt(x, y, dial){
+      const rect = dial.getBoundingClientRect(), k = rect.width / SIZE;
+      let ang = Math.atan2((y - rect.top) / k - C, (x - rect.left) / k - C) + Math.PI / 2;
+      if (ang < 0) ang += 2 * Math.PI;
+      if (step === "day") {
+        const r = range();
+        const d = r.lo + (Math.round(ang / (2 * Math.PI) * r.count) % r.count);
+        if (d !== day) { day = d; updateDial(); }
+      } else {
+        const m = (Math.round(ang / (2 * Math.PI) * 12) % 12) + 1;
+        if (m !== month) { month = m; day = Math.min(day, dim(month, year)); updateDial(); }
+      }
+    }
+    function render(){
+      card.innerHTML =
+        '<h3 class="mdp-title">' + (step === "month" ? "اختر الشهر" : "اختر اليوم") + '</h3>' +
+        '<div class="mdp-display"><button type="button" class="mdp-chip' + (step === "month" ? " is-active" : "") + '"></button>' +
+        (o.onlyMonth ? '' : '<div class="mdp-daybox' + (step === "day" ? " is-active" : "") + '"></div>') + '</div>' +
+        (step === "day" && !o.onlyMonth ? '<button type="button" class="mdp-more-btn"></button>' : "") +
+        '<div class="mdp-dial"><div class="mdp-hand"></div><div class="mdp-center"></div></div>' +
+        '<div class="clock-actions"><button type="button" class="btn mdp-cancel" style="padding:6px 12px">إلغاء</button>' +
+        '<button type="button" class="btn btn-p mdp-ok" style="padding:6px 12px">حسناً</button></div>';
+      const dial = card.querySelector(".mdp-dial");
+      let h = "";
+      if (step === "month") {
+        for (let m = 1; m <= 12; m++) {
+          const a = ((m - 1) / 12) * 2 * Math.PI - Math.PI / 2;
+          h += '<button type="button" class="mdp-month-num" data-month="' + m + '" style="left:' + (C + R * Math.cos(a)) + 'px;top:' + (C + R * Math.sin(a)) + 'px">' + MONTHS[m - 1] + '</button>';
+        }
+      } else {
+        const r = range();
+        for (let i = 0; i < r.count; i++) {
+          const a = (i / r.count) * 2 * Math.PI - Math.PI / 2;
+          h += '<button type="button" class="mdp-num" data-day="' + (r.lo + i) + '" style="left:' + (C + R * Math.cos(a)) + 'px;top:' + (C + R * Math.sin(a)) + 'px">' + (r.lo + i) + '</button>';
+        }
+      }
+      dial.insertAdjacentHTML("beforeend", h);
+      let dragging = false;
+      dial.addEventListener("pointerdown", e => { dragging = true; pickAt(e.clientX, e.clientY, dial); });
+      dial.addEventListener("pointermove", e => { if (dragging) pickAt(e.clientX, e.clientY, dial); });
+      window.addEventListener("pointerup", () => { dragging = false; });
+      if (step === "month") {
+        dial.querySelectorAll(".mdp-month-num").forEach(b => b.addEventListener("click", () => {
+          month = +b.dataset.month; day = Math.min(day, dim(month, year));
+          if (o.onlyMonth) updateDial(); else { step = "day"; more = day > 15; render(); }
+        }));
+      } else {
+        dial.querySelectorAll(".mdp-num").forEach(b => b.addEventListener("click", () => { day = +b.dataset.day; updateDial(); }));
+        card.querySelector(".mdp-more-btn").addEventListener("click", () => {
+          more = !more;
+          if (more && day <= 15) day = 16;
+          if (!more && day > 15) day = 15;
+          render();
+        });
+      }
+      card.querySelector(".mdp-chip").addEventListener("click", () => { step = "month"; render(); });
+      card.querySelector(".mdp-cancel").addEventListener("click", close);
+      card.querySelector(".mdp-ok").addEventListener("click", () => {
+        if (step === "month" && !o.onlyMonth) { step = "day"; more = day > 15; render(); return; }
+        close();
+        if (o.onConfirm) o.onConfirm({ year, month, day, iso: year + "-" + pad2(month) + "-" + pad2(day) });
+      });
+      updateDial();
+    }
+    render();
+  }
+  return { open };
+})();
+
+/* ---------- إضافة موظف من مدير الفرع ---------- */
+const branchAddState = { hire: todayIso() };
+$("addBranchEmpBtn").onclick = () => {
+  ("beRole").innerHTML=[["cashier","كاشير"],["barista","باريستا"],["staff","موظف"]].map(([v,l])=>`<optionvalue="{v}">${l}</option>`).join("");
+  ("beShift").innerHTML=Object.keys(SHIFTS).map(k=>`<optionvalue="{k}">${SHIFTS[k]}</option>`).join("");
+  if (session.shift) $("beShift").value = session.shift;
+  if (!tour.on) branchAddState.hire = todayIso();
+  $("beHireText").value = fmtDate(branchAddState.hire);
+  $("beName").value = "";
+  $("branchAddModal").classList.add("on");
+};
+$("beClose").onclick = () => $("branchAddModal").classList.remove("on");
+function openBranchHirePicker(){
+  const p = branchAddState.hire.split("-").map(Number);
+  MDP.open({ year: p[0], month: p[1], day: p[2], onConfirm: r => { branchAddState.hire = r.iso; $("beHireText").value = fmtDate(r.iso); } });
+}
+$("beHireText").onclick = openBranchHirePicker;
+$("beHireBtn").onclick = openBranchHirePicker;
+$("beAddBtn").onclick = () => {
+  const name = $("beName").value.trim();
+  if (!name) { notify("الرجاء إدخال اسم الموظف"); $("beName").focus(); return; }
+  const b = myBranch(), role = $("beRole").value, shift = $("beShift").value;
+  b.emps.push({ id: "e_" + b.id + "_" + Date.now(), name, role, shift, salary: S.settings.baseSalaries[role] || 6000, start: branchAddState.hire, end: null, suspended: false, transfers: [] });
+  const txt = `قام مدير فرع ${b.name} بإضافة الموظف name({ROLE_TEXT[role]}) - شفت ${SHIFTS[shift]} - تاريخ التعيين ${fmtDate(branchAddState.hire)}`;
+  logAudit(txt);
+  pushNotif({ kind: "info", senderRole: "branch", senderName: b.name, recipientRole: "central", text: txt, year: session.year, month: session.month, shift, branchId: b.id, empId: b.emps[b.emps.length - 1].id, day: 1 });
+  save();
+  $("branchAddModal").classList.remove("on");
+  notify("تمت إضافة الموظف للفرع بنجاح");
+  goDays();
+};
+
+/* ---------- يوم مدير الفرع ---------- */
+function goDay(day){ session.day = day; renderDay(); }
+function renderDay(){
+  const keep = $("sDay").classList.contains("active") ? window.scrollY : 0;
+  const day = session.day, bId = session.branch, key = ck(bId, session.shift, day);
+  const closed = !!S.closed[key], emps = activeEmps(bId, session.shift, day);
+  let h = "";
+  if (closed) h += "<div class='okbar' style='display:flex;justify-content:space-between;align-items:center;background:#e7fce3;color:var(--wa-green-dark);padding:10px;border-radius:8px;margin-bottom:10px'><span style='display:flex;align-items:center;gap:8px'><span class='ticks'>" + TICKS_SVG + "</span>هذا اليوم مؤكد ومغلق</span><button class='btn' data-act='unlock'>تعديل اليوم</button></div>";
+  if (!emps.length) h += "<div class='card center mut'>لا يوجد موظفون نشطون في هذا اليوم بهذا الشفت</div>";
+  emps.forEach(e => {
+    const d = S.rec[rk(e.id, day)], base = BASE[e.role], r = calcDay(d, base), L = closed ? " disabled" : "";
+    const tk = closed ? `<span class="ticks">${TICKS_SVG}</span>` : "";
+    h += `<div class="day-card" id="card_emp_${e.id}_day_${day}"><div class="day-header"><span class="day-title">esc(e.name)<small>({ROLE_TEXT[e.role]})</small></span><span class="day-date">${dayName(day)} day/{session.month + 1}</span></div>`;
+    let tinBlock, toutBlock;
+    if (!d || !d.tin) tinBlock = `<button type="button" class="time-btn-cell action" data-act="tin" data-e="e.id"{L}>إدخال الحضور</button>`;
+    else tinBlock = `<button type="button" class="time-btn-cellclosed?"disabled":"""data-act="tin"data-e="{e.id}"L>{tk} حضور: ${tView(d.tin)}</button>`;
+    if (!d || !d.tin) toutBlock = `<div style="color:var(--muted);text-align:center;font-size:.78rem;padding:6px">الانصراف يظهر بعد الحضور</div>`;
+    else if (!d.tout) toutBlock = `<button type="button" class="time-btn-cell action" data-act="tout" data-e="e.id"{L}>إدخال الانصراف</button>`;
+    else toutBlock = `<button type="button" class="time-btn-cellclosed?"disabled":"""data-act="tout"data-e="{e.id}"L>{tk} انصراف: ${tView(d.tout)}</button>`;
+    h += `<div class="day-body-row"><div class="day-body-grid">tinBlock{toutBlock}</div></div>`;
+    if (d && r.worked) h += "<div class='calc-line' style='font-size:.8rem;font-weight:700;margin-bottom:8px'>الفعلية " + fmt(r.tot) + " | <span class='pos'>إضافي " + fmt(r.ot) + "</span> | <span class='neg'>نقص " + fmt(r.sh) + "</span></div>";
+    if (d) {
+      h += "<div class='day-footer'>" +
+        "<div class='note-wrapper'><input class='note-inp' data-note='" + e.id + "' placeholder='ملاحظة...' value='" + esc(d.note || "") + "'" + L + "></div>" +
+        "<button class='ded-btn" + (d.extra ? " otday-active" : "") + "' data-act='extra' data-e='" + e.id + "'" + L + ">" + (d.extra ? "إضافي: " + d.extra + " يوم" : "يوم إضافي") + "</button>" +
+        "<button class='ded-btn" + (d.comp ? " comp-active" : "") + "' data-act='comp' data-e='" + e.id + "'" + L + ">" + (d.comp ? "تعويض: " + d.comp + " س" : "تعويض ساعات") + "</button>" +
+        "<button class='ded-btn" + (d.ded ? " comp-active" : "") + "' data-act='ded' data-e='" + e.id + "'" + L + ">" + (d.ded ? DED_TEXT[d.ded] : "بدون خصم") + "</button></div>";
+    }
+    h += "</div>";
+  });
+  if (!closed && emps.length) h += "<div class='send-bar'><button type='button' class='send-btn' data-act='confirm' title='تأكيد وإغلاق اليوم' aria-label='تأكيد وإغلاق اليوم'>" + SEND_SVG + "</button></div>";
+  $("dayList").innerHTML = h;
+  show("sDay", myBranch().name, dayName(day) + " " + day + " - " + SHIFTS[session.shift]);
+  if (keep) window.scrollTo(0, keep);
+}
+function setRec(empId, patch){
+  const k = rk(empId, session.day);
+  S.rec[k] = Object.assign({ status: "work", tin: "", tout: "", extra: 0, comp: 0, ded: 0, note: "" }, S.rec[k] || {}, patch);
+  if (session.role === "branch") {
+    const f = findEmp(empId), b = myBranch();
+    const dup = S.notifications.some(n => n.kind === "edit" && !n.read && n.empId === empId && n.day === session.day && n.month === session.month && n.year === session.year);
+    if (f && !dup) pushNotif({ kind: "edit", senderRole: "branch", senderName: b.name, recipientRole: "central", text: `قام فرع ${b.name} بتعديل بيانات الموظف ${f.emp.name} في تاريخ session.day/{session.month + 1}`, year: session.year, month: session.month, shift: session.shift, branchId: b.id, empId, day: session.day });
+  }
+  save(); renderDay();
+}
+$("dayList").addEventListener("click", ev => {
+  const btn = ev.target.closest("[data-act]"); if (!btn || btn.disabled) return;
+  const act = btn.dataset.act, id = btn.dataset.e, key = ck(session.branch, session.shift, session.day);
+  const d = id ? (S.rec[rk(id, session.day)] || {}) : {};
+  const def = SHIFT_DEFAULT[session.shift];
+  if (act === "tin") askTime("وقت الحضور", d.tin || def.tin, v => setRec(id, { status: "work", tin: v }));
+  else if (act === "tout") askTime("وقت الانصراف", d.tout || def.tout, v => setRec(id, { status: "work", tout: v }));
+  else if (act === "extra") pick("يوم إضافي", [[0,"بدون"],[1,"يوم إضافي"],[2,"يوم بيومين"]], v => setRec(id, { extra: +v }));
+  else if (act === "comp") pick("تعويض ساعات", [[0,"بدون"],[1,"ساعة"],[2,"ساعتان"],[3,"3 ساعات"]], v => setRec(id, { comp: +v }));
+  else if (act === "ded") pick("نوع الخصم", Object.keys(DED_TEXT).map(k => [k, DED_TEXT[k]]), v => setRec(id, { ded: +v }));
+  else if (act === "unlock") {
+    S.closed[key] = false;
+    activeEmps(session.branch, session.shift, session.day).forEach(e => {
+      const rKey = rk(e.id, session.day);
+      if (S.rec[rKey]) { if (!S.oldRec[rKey]) S.oldRec[rKey] = []; S.oldRec[rKey].push(JSON.parse(JSON.stringify(S.rec[rKey]))); }
+    });
+    logAudit(`قام مدير فرع "myBranch().name"بفتحوتعديليوم({dayName(session.day)} session.day/{session.month + 1}) لشفت ${SHIFTS[session.shift]}`);
+    save();
+    notify("تم فتح اليوم للتعديل وحفظ النسخة القديمة للمدير المركزي");
+    renderDay();
+  }
+  else if (act === "confirm") { S.closed[key] = true; save(); renderDay(); notify("تم تأكيد وإغلاق اليوم"); }
+});
+$("dayList").addEventListener("input", ev => {
+  const id = ev.target.dataset.note; if (!id) return;
+  const k = rk(id, session.day); if (S.rec[k]) { S.rec[k].note = ev.target.value; save(); }
+});
+$("dayBack").onclick = goDays;
+
+/* ---------- المدير المركزي ---------- */
+function goBranches(){
+  let h = "<h2>اختر الفرع للمتابعة</h2><div class='grid2'>";
+  S.branches.forEach(b => {
+    h += `<div class="card center" style="cursor:pointer" onclick="goEmps('b.id')"><b>{esc(b.name)}</b><br><small class="mut">الموظفون النشطون: ${b.emps.filter(e => !e.suspended).length}</small></div>`;
+  });
+  $("branchList").innerHTML = h + "</div>";
+  show("sBranches", "المدير المركزي - الفروع", ctx());
+}
+$("brBack").onclick = goShift;
+window.goEmps = function(bId){
+  session.branch = bId;
+  const b = branchOf(bId);
+  let h = `<h2>موظفو ${esc(b.name)}</h2><div class="grid2">`;
+  b.emps.forEach(e => {
+    h += `<div class="card center" style="cursor:pointer;e.suspended?"background:#fef2f2;":"""onclick="goSheet('{e.id}')"><b>esc(e.name)</b>{e.suspended ? ' <span class="tag t-red">موقف</span>' : ""}<br><small class="mut">المنصب: ${ROLE_TEXT[e.role]}</small><br><small class="mut">التعيين: ${fmtDate(e.start)}</small></div>`;
+  });
+  $("empList").innerHTML = h + "</div>";
+  show("sEmps", "المدير المركزي - " + b.name, ctx());
+};
+$("empBack").onclick = goBranches;
+$("alertsBtn").onclick = () => {
+  let h = "<h2>سجل التنبيهات والتحركات المركزية</h2>";
+  if (!S.audit.length) h += "<div class='card center mut'>لا توجد تنبيهات مسجلة حتى الآن</div>";
+  else S.audit.slice().reverse().forEach(a => { h += `<div class="card" style="font-size:.9rem;font-weight:700;color:#ea580c">esc(a.text)<br><smallclass="mut">{new Date(a.id).toLocaleString("ar-EG")}</small></div>`; });
+  $("alertList").innerHTML = h;
+  show("sAlerts", "المدير المركزي - التنبيهات", "");
+};
+$("alertsBack").onclick = goBranches;
+
+/* الإعدادات العامة */
+let targetSelectedMonth = session.month;
+$("centralSettingsBtn").onclick = () => {
+  if (session.role !== "central") return;
+  const set = S.settings;
+  $("annualVacationInput").value = set.annualVacation || 21;
+  $("baseSalaryCashier").value = set.baseSalaries.cashier;
+  $("baseSalaryBarista").value = set.baseSalaries.barista;
+  $("baseSalaryStaff").value = set.baseSalaries.staff;
+  ("targetBranchSelectInput").innerHTML=S.branches.map(br=>`<optionvalue="{br.id}">${esc(br.name)}</option>`).join("");
+  targetSelectedMonth = session.month;
+  $("targetMonthDialBtn").textContent = MONTHS[targetSelectedMonth] + " (اضغط للتغيير)";
+  loadBranchTargetToInput();
+  $("centralSettingsModal").classList.add("on");
+};
+$("closeCentralSettingsModal").onclick = () => $("centralSettingsModal").classList.remove("on");
+$("targetMonthDialBtn").onclick = () => {
+  MDP.open({ year: session.year, month: targetSelectedMonth + 1, day: 1, onlyMonth: true,
+    onConfirm: r => { targetSelectedMonth = r.month - 1; $("targetMonthDialBtn").textContent = MONTHS[targetSelectedMonth] + " (اضغط للتغيير)"; loadBranchTargetToInput(); } });
+};
+$("targetBranchSelectInput").onchange = loadBranchTargetToInput;
+function loadBranchTargetToInput(){
+  const key = $("targetBranchSelectInput").value + "_" + session.year + "-" + targetSelectedMonth;
+  $("targetAmountInput").value = S.settings.branchTargets[key] || "";
+}
+$("saveBranchTargetBtn").onclick = () => {
+  const bId = ("targetBranchSelectInput").value,amount=parseFloat(("targetAmountInput").value) || 0;
+  S.settings.branchTargets[bId + "_" + session.year + "-" + targetSelectedMonth] = amount;
+  logAudit(`تم تحديد التارجت الموحد لفرع ${branchOf(bId).name} لشهر ${MONTHS[targetSelectedMonth]} ${session.year} بمبلغ ${amount.toLocaleString()} جنيه`);
+  save(); notify("تم حفظ التارجت الموحد للفرع بنجاح");
+};
+$("saveCentralSettingsBtn").onclick = () => {
+  const cSal = parseFloat($("baseSalaryCashier").value) || BASE_SAL.cashier;
+  const bSal = parseFloat($("baseSalaryBarista").value) || BASE_SAL.barista;
+  const sSal = parseFloat($("baseSalaryStaff").value) || BASE_SAL.staff;
+  S.settings.annualVacation = parseInt($("annualVacationInput").value, 10) || 21;
+  S.settings.baseSalaries = { cashier: cSal, barista: bSal, staff: sSal };
+  S.branches.forEach(br => br.emps.forEach(emp => { emp.salary = S.settings.baseSalaries[emp.role]; }));
+  logAudit("تم تحديث الإعدادات المركزية والرواتب الأساسية المعتمدة للمناصب على مستوى كل الموظفين");
+  save();
+  $("centralSettingsModal").classList.remove("on");
+  notify("تم حفظ الإعدادات وتطبيق الرواتب على كل الموظفين");
+};
+
+/* إضافة وإيقاف الموظفين مركزياً */
+const addEmpState = { hire: todayIso() };
+function goAddEmp(){
+  ("aeJob").innerHTML=[["barista","باريستا"],["cashier","كاشير"],["staff","موظف"]].map(([v,l])=>`<optionvalue="{v}">${l}</option>`).join("");
+  ("aeBranch").innerHTML=S.branches.map(b=>`<optionvalue="{b.id}">${esc(b.name)}</option>`).join("");
+  ("aeShift").innerHTML=Object.keys(SHIFTS).map(k=>`<optionvalue="{k}">${SHIFTS[k]}</option>`).join("");
+  if (session.shift) $("aeShift").value = session.shift;
+  $("aeHireText").value = fmtDate(addEmpState.hire);
+  renderEmpTable();
+  show("sAddEmp", "المدير المركزي - إدارة الموظفين", "");
+}
+function renderEmpTable(){
+  const all = [];
+  S.branches.forEach(b => b.emps.forEach(e => all.push({ e, b })));
+  all.sort((x, y) => (y.e.start || "").localeCompare(x.e.start || ""));
+  const today = todayIso();
+  $("aeCount").textContent = "إجمالي الموظفين: " + all.length;
+  $("aeTbody").innerHTML = all.map(({ e, b }) => {
+    const started = !e.start || e.start <= today;
+    return `<tr><td><b>esc(e.name)</b></td><td><spanclass="job-tag">{ROLE_TEXT[e.role]}</span></td><td>${esc(b.name)} / SHIFTS[e.shift]</td><tdclass="pos">{fmtDate(e.start)}</td>
+      <td>${e.suspended ? '<span class="tag t-red">موقف عن العمل</span>' : (started ? '<span class="tag t-green">نشط</span>' : '<span class="tag t-orange">لم يباشر بعد</span>')}</td>
+      <td>${e.suspended ? `<button class="btn btn-p" style="padding:4px 8px;font-size:.75rem" data-resume="${e.id}">إعادة تنشيط</button>` : `<button class="btn btn-danger" style="padding:4px 8px;font-size:.75rem" data-suspend="${e.id}">إيقاف الموظف</button>`}</td></tr>`;
+  }).join("");
+}
+$("aeTbody").addEventListener("click", ev => {
+  const s = ev.target.closest("[data-suspend]"), r = ev.target.closest("[data-resume]");
+  if (s) triggerSuspendModal(s.dataset.suspend);
+  else if (r) resumeEmp(r.dataset.resume);
+});
+let pendingSuspendEmpId = null;
+function triggerSuspendModal(empId){
+  const f = findEmp(empId); if (!f) return;
+  pendingSuspendEmpId = empId;
+  $("suspendEmpNameLabel").textContent = "الموظف: " + f.emp.name + " (" + ROLE_TEXT[f.emp.role] + ")";
+  $("suspendDateInput").value = fmtDate(todayIso());
+  $("suspendModal").classList.add("on");
+}
+$("closeSuspendModal").onclick = () => $("suspendModal").classList.remove("on");
+$("confirmSuspendBtn").onclick = () => {
+  const f = findEmp(pendingSuspendEmpId); if (!f) return;
+  f.emp.suspended = true; f.emp.end = todayIso();
+  logAudit(`تم إيقاف الموظف ${f.emp.name} عن العمل في فرع ${f.br.name} ابتداءً من ${fmtDate(todayIso())}`);
+  save();
+  $("suspendModal").classList.remove("on");
+  notify("تم إيقاف الموظف واستبعاده من جداول الفروع");
+  if ($("sSheet").classList.contains("active")) goSheet(pendingSuspendEmpId); else renderEmpTable();
+};
+function resumeEmp(empId){
+  const f = findEmp(empId); if (!f) return;
+  f.emp.suspended = false; f.emp.end = null;
+  logAudit(`تم إعادة تنشيط الموظف ${f.emp.name} للعمل بفرع ${f.br.name}`);
+  save(); notify("تمت إعادة تنشيط الموظف بنجاح"); renderEmpTable();
+}
+function openHirePicker(){
+  const p = addEmpState.hire.split("-").map(Number);
+  MDP.open({ year: p[0], month: p[1], day: p[2], onConfirm: r => { addEmpState.hire = r.iso; $("aeHireText").value = fmtDate(r.iso); } });
+}
+$("aeHireText").onclick = openHirePicker;
+$("aeHireBtn").onclick = openHirePicker;
+$("aeAddBtn").onclick = () => {
+  const name = $("aeName").value.trim();
+  if (!name) { notify("الرجاء إدخال اسم الموظف"); $("aeName").focus(); return; }
+  const role = $("aeJob").value, bId = $("aeBranch").value, shift = $("aeShift").value, br = branchOf(bId);
+  if (!br) return;
+  br.emps.push({ id: "e_" + bId + "_" + Date.now(), name, role, shift, salary: S.settings.baseSalaries[role] || 6000, start: addEmpState.hire, end: null, suspended: false, transfers: [] });
+  logAudit(`تمت إضافة الموظف name({ROLE_TEXT[role]}) إلى فرع ${br.name} - شفت ${SHIFTS[shift]} - تاريخ التعيين ${fmtDate(addEmpState.hire)}`);
+  save(); $("aeName").value = ""; renderEmpTable(); notify("تمت إضافة الموظف بنجاح");
+};
+$("addEmpBtn").onclick = goAddEmp;
+$("aeBack").onclick = goBranches;
+
+/* تقرير الموظف */
+window.goSheet = function(empId){
+  const f = findEmp(empId); if (!f) return;
+  const emp = f.emp, originalB = f.br;
+  session.empId = empId; session.branch = originalB.id;
+  ("sheetHead").innerHTML=`الموظف:<b>{esc(emp.name)}</b>${emp.suspended ? ' <span class="tag t-red">موقف عن العمل</span>' : ""} &nbsp;|&nbsp; المنصب الحالي: ${ROLE_TEXT[emp.role]} &nbsp;|&nbsp; الفرع الحالي: ${esc(originalB.name)}`;
+  $("salaryInput").value = emp.salary || 6000;
+  $("roleSelectInput").value = emp.role;
+  const trs = (emp.transfers || []).filter(t => t.ym === ym()).sort((a, b) => a.day - b.day);
+  let html = "";
+  if (trs.length) {
+    const t = trs[0], fb = branchOf(t.fromBranch), tb = branchOf(t.toBranch);
+    $("sheetAlert").innerHTML = `<div class="card" style="font-weight:700;color:#ea580c">ملاحظة مركزية: تم نقل الموظف من فرع ${esc(fb ? fb.name : "")} إلى فرع ${esc(tb ? tb.name : "")} ابتداءً من يوم ${t.day}</div>`;
+    if (t.day > 1) html += buildSectionTable(emp, fb ? fb.name : "الفرع الأول", 1, t.day - 1, t.fromBranch);
+    html += buildSectionTable(emp, tb ? tb.name : "الفرع الثاني", t.day, daysIn(), t.toBranch);
+  } else {
+    $("sheetAlert").innerHTML = "";
+    html = buildSectionTable(emp, originalB.name, 1, daysIn(), originalB.id);
+  }
+  $("sheetContainer").innerHTML = html;
+  updateSummaryPanelData(emp, originalB.id);
+  show("sSheet", "المدير المركزي - تقرير الموظف", "");
+};
+function buildSectionTable(emp, branchTitle, fromDay, toDay, branchId){
+  let rows = "";
+  const base = BASE[emp.role];
+  for (let d = fromDay; d <= toDay; d++){
+    if (emp.start && isoDay(d) < emp.start) continue;
+    const rKey = rk(emp.id, d), rec = S.rec[rKey], oldRecs = S.oldRec[rKey] || [];
+    oldRecs.forEach((o, idx) => {
+      const ro = calcDay(o, base);
+      const st = o.status !== "work" ? STATUS_TEXT[o.status] : "التسجيل القديم (" + (idx + 1) + ")";
+      rows += `<tr class="row-old"><td>dayName(d)(قديم)</td><td>{d}/session.month+1</td><td>{st}</td><td>tView(o.tin)</td><td>{tView(o.tout)}</td><td>ro.worked?fmt(ro.tot):"--:--"</td><td>{ro.ot ? "+" + fmt(ro.ot) : "--"}</td><td>ro.sh?"-"+fmt(ro.sh):"--"</td><td>{o.ded ? DED_TEXT[o.ded] : "بدون"}</td><td>${esc(o.note || "")}</td></tr>`;
+    });
+    const r = calcDay(rec, base);
+    let st = "<span class='mut'>فارغ</span>";
+    if (rec) st = rec.status === "work" ? "<span class='pos'>" + (oldRecs.length ? "التسجيل الصحيح (الحالي)" : "عمل") + "</span>" : "<span class='neg'>" + STATUS_TEXT[rec.status] + "</span>";
+    rows += `<tr id="row_day_d"class="{oldRecs.length ? "row-new" : ""}"><td>dayName(d)</td><td>{d}/session.month+1</td><td>{st}</td><td>rec?tView(rec.tin):"--:--"</td><td>{rec ? tView(rec.tout) : "--:--"}</td><td>r.worked?fmt(r.tot):"--:--"</td><tdclass="pos">{r.ot ? "+" + fmt(r.ot) : "--"}</td><td class="neg">r.sh?"-"+fmt(r.sh):"--"</td><td>{rec && rec.ded ? DED_TEXT[rec.ded] : "بدون"}</td>
+      <td>esc(rec?rec.note:"")<buttonclass="btnbtn-p"style="padding:2px6px;font-size:.7rem;margin-right:6px"onclick="openCommentModal('{emp.id}','branchId','{emp.shift}',${d})">تعليق</button></td></tr>`;
+  }
+  if (!rows) rows = `<tr><td colspan="10" class="mut">لم يكن الموظف معيّناً في هذه الفترة (تاريخ التعيين: ${fmtDate(emp.start)})</td></tr>`;
+  return `<div style="background:#e2effa;color:#0369a1;font-weight:bold;font-size:.95rem;padding:10px 14px;border-radius:6px 6px 0 0;border:1px solid var(--border);border-bottom:none">فترة الفرع: ${esc(branchTitle)} (من يوم ${fromDay} إلى ${toDay})</div>
+  <div class="sheet"><table class="attendance-table"><thead><tr><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th>الحضور</th><th>الانصراف</th><th>الفعلية</th><th>الإضافي (+)</th><th>النقص (-)</th><th>نوع الخصم</th><th>الملاحظات والإجراء</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function updateSummaryPanelData(emp, branchId){
+  const s = monthStats(emp), tv = branchTarget(branchId || holderOf(emp));
+  $("summaryPanelContent").innerHTML = `<b>الملخص المالي والإحصائي لشهر ${MONTHS[session.month]} ${session.year}:</b><br>
+    • التارجت الموحد للفرع: ${tv ? `<span class="pos">${tv.toLocaleString()} جنيه</span>` : `<span class="mut">لم يحدد بعد لهذا الشهر</span>`}<br>
+    • أيام العمل الفعلية: ${s.wDays} أيام<br>
+    • ساعات الشفت اليومية: s.baseساعات({ROLE_TEXT[emp.role]})<br>
+    • إجمالي الإضافي: ${fmt(s.ot)}<br>
+    • إجمالي النقص: ${fmt(s.sh)}<br>
+    • إجمالي أيام الخصم: ${s.ded} يوم<br>
+    • الراتب الصافي: <span class="pos">${s.net.toFixed(0)} جنيه</span>`;
+}
+$("sheetBack").onclick = () => goEmps(session.branch);
+$("toggleSalaryBtn").onclick = () => { const p = $("salaryPanel"); p.style.display = p.style.display === "none" ? "block" : "none"; };
+$("toggleSummaryBtn").onclick = () => { const p = $("summaryPanel"); p.style.display = p.style.display === "none" ? "block" : "none"; };
+$("changeRoleBtn").onclick = () => { const p = $("rolePanel"); p.style.display = p.style.display === "none" ? "block" : "none"; };
+$("suspendEmpBtn").onclick = () => { if (session.empId) triggerSuspendModal(session.empId); };
+$("updateRoleBtn").onclick = () => {
+  const f = findEmp(session.empId); if (!f) return;
+  const oldRole = f.emp.role, newRole = $("roleSelectInput").value;
+  f.emp.role = newRole;
+  logAudit(`تم تغيير منصب الموظف f.emp.nameمن({ROLE_TEXT[oldRole]}) إلى (${ROLE_TEXT[newRole]})`);
+  save(); $("rolePanel").style.display = "none"; goSheet(session.empId);
+  notify("تم تغيير المنصب وتحديث ساعات العمل الأساسية");
+};
+$("updateSalaryBtn").onclick = () => {
+  const f = findEmp(session.empId); if (!f) return;
+  f.emp.salary = parseFloat($("salaryInput").value) || 6000;
+  save(); updateSummaryPanelData(f.emp, f.br.id); notify("تم تحديث الراتب بنجاح");
+};
+$("printReceiptBtn").onclick = () => {
+  const f = findEmp(session.empId); if (!f) return;
+  const emp = f.emp, s = monthStats(emp), tv = branchTarget(f.br.id);
+  $("receiptPrintArea").innerHTML = `
+    <div class="receipt-header"><h2>إيصال صرف صافي الراتب</h2><p>نظام الحضور والرواتب المركزي</p></div>
+    <div class="receipt-row"><span>الموظف:</span><span>${esc(emp.name)}</span></div>
+    <div class="receipt-row"><span>المنصب:</span><span>${ROLE_TEXT[emp.role]}</span></div>
+    <div class="receipt-row"><span>الفرع:</span><span>${esc(f.br.name)}</span></div>
+    <div class="receipt-row"><span>الفترة:</span><span>${MONTHS[session.month]} ${session.year}</span></div>
+    <div class="receipt-divider"></div>
+    <div class="receipt-row"><span>تارجت الفرع:</span><span>${tv ? tv.toLocaleString() + " ج.م" : "غير محدد"}</span></div>
+    <div class="receipt-row"><span>أيام العمل الفعلية:</span><span>${s.wDays} يوم</span></div>
+    <div class="receipt-row"><span>ساعات الشفت اليومية:</span><span>${s.base} ساعات</span></div>
+    <div class="receipt-divider"></div>
+    <div class="receipt-row"><span>الراتب الأساسي:</span><span>${s.salary.toLocaleString()} ج.م</span></div>
+    <div class="receipt-row"><span>إجمالي الإضافي:</span><span>${fmt(s.ot)}</span></div>
+    <div class="receipt-row"><span>إجمالي النقص:</span><span>${fmt(s.sh)}</span></div>
+    <div class="receipt-row"><span>الخصومات (s.dedيوم):</span><span>{s.dedVal.toFixed(0)} ج.م</span></div>
+    <div class="receipt-box"><div class="title">الصافي النهائي المستحق</div><div class="amount">${s.net.toFixed(0)} ج.م</div></div>
+    <div class="receipt-sig"><div>توقيع الموظف:<br>...............</div><div>اعتماد الإدارة:<br>...............</div></div>
+    <div class="receipt-footer">تاريخ الطباعة: ${new Date().toLocaleString("ar-EG")}</div>`;
+  window.print();
+};
+
+/* ---------- التعليقات والإشعارات ---------- */
+let targetCommentData = null;
+window.openCommentModal = function(empId, branchId, shift, day){
+  const f = findEmp(empId), br = branchOf(branchId);
+  targetCommentData = { empId, branchId, shift, day, empName: f ? f.emp.name : "", branchName: br ? br.name : "" };
+  ("commentInfoLabel").textContent=`إرسالتعليقلفرع({targetCommentData.branchName}) بخصوص الموظف (${targetCommentData.empName}) - يوم day/{session.month + 1}`;
+  $("centralCommentInput").value = "";
+  $("commentModal").classList.add("on");
+};
+$("closeCommentModal").onclick = () => $("commentModal").classList.remove("on");
+$("sendCommentBtn").onclick = () => {
+  const text = $("centralCommentInput").value.trim();
+  if (!text) { notify("الرجاء كتابة نص الملاحظة"); return; }
+  const c = targetCommentData;
+  pushNotif({ kind: "comment", senderRole: "central", senderName: "المدير المركزي", recipientRole: "branch", recipientBranchId: c.branchId,
+    text: `ملاحظة مركزية بخصوص الموظف ${c.empName} (يوم c.day/{session.month + 1}): ${text}`,
+    year: session.year, month: session.month, shift: c.shift, branchId: c.branchId, empId: c.empId, day: c.day });
+  save();
+  $("commentModal").classList.remove("on");
+  notify("تم إرسال التعليق والإشعار الفوري لمدير الفرع");
+};
+function myNotifs(){
+  if (session.role === "central") return S.notifications.filter(n => n.recipientRole === "central");
+  if (session.role === "branch") return S.notifications.filter(n => n.recipientRole === "branch" && n.recipientBranchId === session.branch);
+  return [];
+}
+function updateNotifBadge(){
+  const badge = $("notifBadge"); if (!badge) return;
+  const unread = myNotifs().filter(n => !n.read).length;
+  badge.textContent = unread; badge.style.display = unread > 0 ? "inline-block" : "none";
+}
+$("notifBellBtn").onclick = () => {
+  const list = myNotifs();
+  let h = "";
+  if (!list.length) h = "<div class='card center mut'>لا توجد إشعارات</div>";
+  else list.slice().reverse().forEach(n => {
+    h += `<div class="card" data-notif="n.id"style="padding:10px;margin-bottom:8px;background:{n.read ? "#fff" : "#fef2f2"};cursor:pointer">
+      <div style="font-weight:700;font-size:.85rem;color:var(--wa-header)">من: ${esc(n.senderName)}</div>
+      <div style="font-size:.9rem;margin:4px 0">${esc(n.text)}</div>
+      <div style="font-size:.72rem;color:var(--muted)">${n.time}</div></div>`;
+  });
+  $("notifListContainer").innerHTML = h;
+  $("notifModal").classList.add("on");
+};
+$("notifListContainer").addEventListener("click", ev => {
+  const c = ev.target.closest("[data-notif]"); if (c) handleNotificationClick(c.dataset.notif);
+});
+$("closeNotifModal").onclick = () => $("notifModal").classList.remove("on");
+function handleNotificationClick(id){
+  const n = S.notifications.find(x => x.id === id); if (!n) return;
+  n.read = true; save(); updateNotifBadge();
+  $("notifModal").classList.remove("on");
+  session.year = n.year; session.month = n.month; session.shift = n.shift;
+  if (session.role === "branch") {
+    session.branch = n.branchId; session.week = Math.floor((n.day - 1) / 7);
+    goDay(n.day);
+    setTimeout(() => {
+      const el = document.getElementById(`card_emp_${n.empId}_day_${n.day}`);
+      if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("highlight-flash"); setTimeout(() => el.classList.remove("highlight-flash"), 2600); }
+    }, 200);
+  } else {
+    goSheet(n.empId);
+    setTimeout(() => {
+      const el = document.getElementById(`row_day_${n.day}`);
+      if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("highlight-flash"); setTimeout(() => el.classList.remove("highlight-flash"), 2600); }
+    }, 200);
+  }
+}
+
+/* ---------- نوافذ الاختيار والساعة ---------- */
+function pick(title, opts, cb){
+  $("pickTitle").textContent = title;
+  const g = $("pickOpts"); g.innerHTML = "";
+  opts.forEach(([v, l]) => {
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = l;
+    b.onclick = () => { $("pickModal").classList.remove("on"); cb(v); };
+    g.appendChild(b);
+  });
+  $("pickModal").classList.add("on");
+}
+$("pickCancel").onclick = () => $("pickModal").classList.remove("on");
+
+let clockState = { hour: 8, min: 0, isPM: false, mode: "hours", cb: null };
+function renderClockFace(){
+  const wrap = $("digitsWrap"); wrap.innerHTML = "";
+  const isHours = clockState.mode === "hours", radius = 64;
+  for (let i = 0; i < 12; i++) {
+    const val = isHours ? (i === 0 ? 12 : i) : (i * 5) % 60;
+    const angle = (i * 30) * Math.PI / 180;
+    const dig = document.createElement("div");
+    dig.className = "clock-digit"; dig.textContent = isHours ? String(val) : pad2(val);
+    dig.style.left = (100 + radius * Math.sin(angle)) + "px"; dig.style.top = (100 - radius * Math.cos(angle)) + "px";
+    if (isHours && val === clockState.hour) dig.classList.add("active");
+    dig.onclick = e => {
+      e.stopPropagation();
+      if (isHours) { clockState.hour = val; clockState.mode = "mins"; } else clockState.min = val;
+      updateClockUI();
+    };
+    wrap.appendChild(dig);
+  }
+  ("clockHand").style.transform=`rotate({isHours ? (clockState.hour % 12) * 30 : clockState.min * 6}deg)`;
+  $("handVal").textContent = isHours ? clockState.hour : pad2(clockState.min);
+}
+function updateClockUI(){
+  $("dispHour").textContent = pad2(clockState.hour);
+  $("dispMin").textContent = pad2(clockState.min);
+  $("dispHour").classList.toggle("active", clockState.mode === "hours");
+  $("dispMin").classList.toggle("active", clockState.mode === "mins");
+  $("btnAM").classList.toggle("active", !clockState.isPM);
+  $("btnPM").classList.toggle("active", clockState.isPM);
+  renderClockFace();
+}
+$("clockFaceWrap").onclick = e => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = e.clientX - rect.left - 100, y = e.clientY - rect.top - 100;
+  let angle = Math.atan2(x, -y) * 180 / Math.PI; if (angle < 0) angle += 360;
+  if (clockState.mode === "hours") { let h = Math.round(angle / 30); if (h === 0) h = 12; clockState.hour = h; clockState.mode = "mins"; }
+  else clockState.min = Math.round(angle / 360 * 60) % 60;
+  updateClockUI();
+};
+function askTime(title, cur24, cb){
+  $("timeTitle").textContent = title; clockState.cb = cb; clockState.mode = "hours";
+  const p = (cur24 || "08:00").split(":").map(Number);
+  clockState.isPM = p[0] >= 12;
+  let h12 = p[0] % 12; if (h12 === 0) h12 = 12;
+  clockState.hour = h12; clockState.min = p[1];
+  updateClockUI();
+  $("timeModal").classList.add("on");
+}
+$("dispHour").onclick = () => { clockState.mode = "hours"; updateClockUI(); };
+$("dispMin").onclick = () => { clockState.mode = "mins"; updateClockUI(); };
+$("btnAM").onclick = () => { clockState.isPM = false; updateClockUI(); };
+$("btnPM").onclick = () => { clockState.isPM = true; updateClockUI(); };
+$("timeCancel").onclick = () => $("timeModal").classList.remove("on");
+$("timeOk").onclick = () => {
+  $("timeModal").classList.remove("on");
+  let h24 = clockState.hour;
+  if (clockState.isPM && h24 < 12) h24 += 12;
+  if (!clockState.isPM && h24 === 12) h24 = 0;
+  if (clockState.cb) clockState.cb(pad2(h24) + ":" + pad2(clockState.min));
+};
+
+/* =================== الدليل التفاعلي الكامل =================== */
+const vis = el => !!el && el.getClientRects().length > 0;
+const q1 = s => document.querySelector(s);
+const qa = s => Array.from(document.querySelectorAll(s));
+const byText = (sel, txt, exact) => () => qa(sel).filter(vis).find(e => exact ? e.textContent.trim() === txt : e.textContent.includes(txt)) || null;
+const clockDigit = (txt, mode) => () => clockState.mode === mode ? (qa("#digitsWrap .clock-digit").find(d => d.textContent === txt) || null) : null;
+const MODAL = ".modal.on .mbox", MDPC = ".mdp-card";
+const click = (find, text, x) => Object.assign({ find, text }, x || {});
+const info = (find, text, x) => Object.assign({ find, text, info: true }, x || {});
+const keypad1 = () => click(byText("#keypad button", "1", true), "أهلاً بحضرتك يا أ/ عبد الله. دي جولة عملية بتوضح تصور مبدئي لنظام إدارة الحضور والفروع. رمز الدخول التجريبي 1111، والبيانات المعروضة للتوضيح فقط.", { need: 4 });
+const loginStep = () => click(() => $("loginBtn"), "اضغط دخول لبدء التجربة.");
+const centralTrFirst = () => qa("#aeTbody tr").find(tr => tr.textContent.includes("ياسر"));
+
+const TOUR_STEPS = [
+  /* ===== المرحلة 1: مدير الفرع ===== */
+  info(() => q1("#sLogin .card"), "أهلاً بحضرتك يا أ/ عبد الله. حبيت أعرض الفكرة من خلال سيناريو شغل قريب من الواقع، مش مجرد استعراض شاشات. هنشوف مدير الفرع بيسجل الحضور والانصراف، وإزاي البيانات والحسابات بتوصل للإدارة المركزية للمراجعة والمتابعة. الهدف توضيح فرصة تقليل الإدخال اليدوي، وتوحيد طريقة الشغل، وتسهيل الوصول للمعلومة. العرض تجريبي ببيانات توضيحية، ولسه قابل للنقاش والتطوير حسب طبيعة العمل عندكم.."),
+  keypad1(),
+  loginStep(),
+  click(byText("#monthGrid button", "أكتوبر", true), "نبدأ بتحديد الشهر المالي المطلوب مراجعته. اختار أكتوبر."),
+  click(() => q1('[data-shift="morning"]'), "بعدها نحدد الشفت. الفصل بين الصباحي والمسائي بيساعد إن تسجيل كل مجموعة يفضل واضح ومنظم. اختر الصباحي."),
+  info(() => q1("#sDays .demo"), "من هنا تقدر تعرف حالة كل يوم بسرعة: الأحمر لسه ما بدأش، البرتقالي التسجيل بدأ ولسه مفتوح، والأخضر اليوم اتراجع واتقفل. حالة الشغل قدامك بدل ما تدور عليها في كشوف أو رسائل.."),
+  click(() => q1("#daysGrid .dcard"), "افتح أول يوم وشوف تسجيل الموظفين في مكان واحد."),
+  info(() => q1("#dayList .day-card"), "كل موظف ظاهر في بطاقة مستقلة باسمه ووظيفته، والقائمة بتراعي تاريخ التعيين أو النقل أو الإيقاف. كده مدير الفرع بيتعامل مع العاملين الفعليين في الشفت من غير ما يعيد تجهيز كشف كل يوم."),
+  click(() => q1('#dayList [data-act="tin"]'), "سجّل وقت الحضور من هنا. واجهة إدخال الوقت مصممة عشان تكون مباشرة ومألوفة، من غير كتابة معقدة."),
+  click(clockDigit("8", "hours"), "اختار الساعة 8 ، مجرد ما يضغط الساعة فورا ح تجيبه للدقائق .", { anchor: MODAL }),
+  click(clockDigit("00", "mins"), "اختار اختار الدقائق 00.", { anchor: MODAL }),
+  click(() => $("timeOk"), "أكد وقت الحضور. النظام مؤتمته في الحته دي عشان يوضح الفترة صباحاً أو مساءً عشان نقلل أخطاء التسجيل.", { anchor: MODAL }),
+  click(() => q1('#dayList [data-act="tout"]'), "بعد تسجيل الحضور، يظهر إدخال الانصراف. سجّل وقت الانصراف بنفس الطريقة."),
+  click(clockDigit("4", "hours"), "اختار الساعة 4.", { anchor: MODAL }),
+  click(clockDigit("00", "mins"), "اختار الدقائق 00.", { anchor: MODAL }),
+  click(() => $("btnPM"), "تأكد إن الفترة مساءً، لأن المثال هنا انصراف الساعة الرابعة عصراً.", { anchor: MODAL }),
+  click(() => $("timeOk"), "أكد وقت الانصراف.", { anchor: MODAL }),
+  info(() => q1("#dayList .calc-line"), "هنا واحدة من أهم نقاط الفكرة: النظام يحسب ساعات العمل والزيادة أو العجز مقارنة بساعات الدوام المحددة للوظيفة. بدل الجمع اليدوي ونقل الأرقام بين الورق والملفات، الحساب يظهر مع التسجيل نفسه.."),
+  click(() => q1("#dayList .note-inp"), "لو فيه توضيح لحالة الموظف، اكتبه هنا. الملاحظة هتفضل مرتبطة بالتسجيل نفسه وتظهر أثناء المراجعة، بدل ما تضيع في رسالة منفصلة.", { onClick: () => { const el = q1("#dayList .note-inp"); if (el) { el.value = "تأخر بسبب المواصلات"; el.dispatchEvent(new Event("input", { bubbles: true })); } } }),
+  click(() => q1('#dayList [data-act="extra"]'), "لو الموظف اشتغل يوم إضافي، سجّل الاستحقاق من نفس البطاقة عشان يدخل في الحساب."),
+  click(byText("#pickOpts button", "يوم إضافي", true), "اختار يوم إضافي واحد للتجربة.", { anchor: MODAL }),
+  click(() => q1('#dayList [data-act="comp"]'), "ولو فيه ساعات تعويض مستحقة، تقدر تسجلها هنا بشكل منفصل وواضح."),
+  click(byText("#pickOpts button", "ساعة", true), "اختار ساعة واحدة.", { anchor: MODAL }),
+  click(() => q1('#dayList [data-act="ded"]'), "وأي خصم معتمد بيتسجل في مكانه، فيبقى ظاهر في المراجعة والحساب النهائي."),
+  click(byText("#pickOpts button", "نصف يوم", true), "اختار نصف يوم للتجربة.", { anchor: MODAL }),
+  info(() => $("notifBellBtn"), "المهم إن التسجيل مش بيقف عند مدير الفرع؛ التحديثات بتوصل للإدارة في صورة إشعارات، وده يقلل الاعتماد على إرسال الصور وتجميع الملفات في نهاية اليوم."),
+  click(() => q1('#dayList [data-act="confirm"]'), "بعد مراجعة التسجيلات، اقفل اليوم. كده يبقى واضح إن بيانات اليوم اتراجعت واتسلمت للمتابعة المركزية."),
+  info(() => q1("#dayList .okbar"), "اليوم اتقفل، وحالته بقت واضحة. الإغلاق بيحافظ على انتظام الدورة اليومية، وأي تعديل بعده بيتم من خلال خطوة واضحة."),
+  click(() => q1('#dayList [data-act="unlock"]'), "ولو ظهر خطأ بعد الإغلاق، مش بنمسح الأثر القديم. بنفتح اليوم للتعديل، والنظام يحتفظ بالتسجيل السابق ويسجل التغيير، بحيث تقدر الإدارة تراجع إيه اللي اتغير ومتى."),
+  click(() => q1('#dayList [data-act="tout"]'), "عدّل وقت الانصراف كمثال على تصحيح تسجيل سابق."),
+  click(clockDigit("5", "hours"), "اختار الساعة 5.", { anchor: MODAL }),
+  click(clockDigit("00", "mins"), "اختار الدقائق 00.", { anchor: MODAL }),
+  click(() => $("timeOk"), "أكد التعديل.", { anchor: MODAL }),
+  click(() => q1('#dayList [data-act="confirm"]'), "بعد التصحيح، راجع البيانات وأغلق اليوم مرة تانية."),
+  click(() => $("dayBack"), "ارجع لقائمة الأيام لمراجعة الحالة."),
+  info(() => q1("#daysGrid .dcard"), "لاحظ إن اليوم بقى أخضر ومكتمل. الإدارة ومدير الفرع بيشوفوا حالة التسجيل من غير متابعة يدوية."),
+  click(() => $("wNext"), "تقدر تنتقل بين أسابيع الشهر لمراجعة الأيام المطلوبة."),
+  click(() => $("wPrev"), "وارجع للأسبوع السابق وقت الحاجة."),
+
+  /* إضافة موظف من مدير الفرع */
+  click(() => $("addBranchEmpBtn"), "إضافة الموظف بتتم من داخل النظام، وبتتربط بتاريخ المباشرة والفرع والشفت.  كشوف الحضور ح تبقى  محدثة بدل تداول نسخ مختلفة."),
+  click(() => $("beName"), "اكتب اسم الموظف.", { anchor: MODAL, onClick: () => { $("beName").value = "إبراهيم سعيد"; } }),
+  info(() => $("beRole"), "حدد الوظيفة؛ لأن ساعات الدوام والراتب الأساسي مرتبطين بالمسمى الوظيفي.", { anchor: MODAL }),
+  info(() => $("beShift"), "حدد الشفت اللي هيباشر فيه.", { anchor: MODAL }),
+  click(() => $("beHireBtn"), "حدد تاريخ المباشرة عشان يظهر الموظف في الأيام الصحيحة فقط.", { anchor: MODAL }),
+  click(() => q1('.mdp-month-num[data-month="10"]'), "اختار أكتوبر.", { anchor: MDPC }),
+  click(() => q1('.mdp-num[data-day="1"]'), "اختار يوم 1.", { anchor: MDPC }),
+  click(() => q1(".mdp-ok"), "أكد التاريخ.", { anchor: MDPC }),
+  click(() => $("beAddBtn"), "أضف الموظف. هيظهر في الجداول من تاريخ مباشرته، وتوصل للإدارة المركزية معلومة الإضافة.", { anchor: MODAL }),
+
+  /* إدارة الموظفين: نقل وإزالة */
+  click(() => $("branchEmpSettingsBtn"), "ومن نفس الواجهة تقدر تدير حركة الموظفين، سواء نقل بين الفروع أو إزالة من قائمة الفرع."),
+  info(() => $("branchEmpsListForManage"), "دي قائمة الموظفين النشطين في الفرع، والإجراء المطلوب متاح بجانب كل اسم.", { anchor: MODAL }),
+  click(() => qa("#branchEmpsListForManage [data-transfer]")[1] || null, "جرّب اختيار نقل بجانب الموظف.", { anchor: MODAL }),
+  info(() => $("targetBranchSelect"), "حدد الفرع المستقبِل.", { anchor: MODAL }),
+  info(() => $("transferDayInput"), "حدد تاريخ سريان النقل. التسجيلات السابقة تفضل مرتبطة بالفرع القديم، واللاحقة بالفرع الجديد، عشان كل فترة تتحسب على الفرع الصحيح.", { anchor: MODAL }),
+  click(() => $("confirmTransferBtn"), "اعتمد النقل. الحركة بتتسجل في سجل المتابعة، وتظهر للإدارة المركزية.", { anchor: MODAL }),
+  click(() => $("branchEmpSettingsBtn"), "افتح إدارة الموظفين مرة تانية لمراجعة إجراء الإزالة."),
+  click(() => qa("#branchEmpsListForManage [data-remove]").pop() || null, "اختار إزالة للموظف التجريبي.", { anchor: MODAL }),
+  click(() => $("confirmBranchRemoveEmpBtn"), "أكد الإزالة. الموظف يُستبعد من الجداول من التاريخ المحدد، مع تسجيل الحركة وإبلاغ الإدارة المركزية.", { anchor: MODAL }),
+
+  /* ===== المرحلة 2: المدير المركزي ===== */
+  click(() => $("logoutBtn"), "كده شفنا دورة العمل من ناحية الفرع: تسجيل، حساب تلقائي، إغلاق، وتصحيح موثق اي ادخال بدخلو مدير الفرع بيترجم بشكل سطر للموظف الفلاني في اليوم الفلاني ودي ح تريحك من صداع كبير وفي نفس الوقت ح تكون استباقي لانو دورك ح يكون مراجعة بس. ننتقل دلوقتي للصورة المركزية عشان نشوف نفس البيانات بتوصل للإدارة إزاي."),
+  click(() => $("pinInput"), "ندخل بحساب العرض الخاص بالإدمن.", { onClick: () => { $("pinInput").value = CENTRAL_PASSWORD; } }),
+  loginStep(),
+  click(byText("#monthGrid button", "أكتوبر", true), "اختار أكتوبر لمراجعة بيانات الشهر."),
+  click(() => q1('[data-shift="morning"]'), "اختار الشفت الصباحي."),
+  info(() => q1("#branchList .grid2"), "هنا تظهر الفروع الثمانية في شاشة واحدة، مع عدد الموظفين النشطين بكل فرع. الفكرة إن المتابعة تبدأ من صورة عامة، وبعدها تقدر تدخل لتفاصيل أي فرع أو موظف من غير انتظار كشوف منفصلة."),
+
+  /* الإعدادات العامة */
+  click(() => $("centralSettingsBtn"), "ومن هنا الإدارة المركزية تقدر تضبط الإعدادات العامة من مكان واحد."),
+  info(() => $("annualVacationInput").closest(".card"), "إعداد أيام الإجازة السنوية المعتمدة.", { anchor: MODAL }),
+  info(() => $("baseSalaryCashier").closest(".card"), "الراتب الأساسي لكل وظيفة بيتحدد مركزياً، بحيث تكون القاعدة موحدة وتنعكس على حسابات الموظفين حسب المسمى الوظيفي.", { anchor: MODAL }),
+  info(() => $("targetBranchSelectInput"), "حدد الفرع اللي هتراجع أو تضبط التارجت الخاص بيه.", { anchor: MODAL }),
+  click(() => $("targetMonthDialBtn"), "حدد الشهر المطلوب.", { anchor: MODAL }),
+  click(() => q1('.mdp-month-num[data-month="10"]'), "اختار أكتوبر.", { anchor: MDPC }),
+  click(() => q1(".mdp-ok"), "أكد الاختيار.", { anchor: MDPC }),
+  click(() => $("targetAmountInput"), "أدخل قيمة التارجت المعتمدة للفرع.", { anchor: MODAL, onClick: () => { $("targetAmountInput").value = 150000; } }),
+  click(() => $("saveBranchTargetBtn"), "احفظ التارجت. هيظهر في ملخصات الموظفين وكشف الراتب المرتبطين بالفرع والشهر.", { anchor: MODAL }),
+  click(() => $("saveCentralSettingsBtn"), "احفظ الإعدادات لتطبيق القواعد المعتمدة.", { anchor: MODAL }),
+
+  /* إضافة وإيقاف موظف مركزياً */
+  click(() => $("addEmpBtn"), "الإدارة المركزية تقدر كمان تدير ملف الموظف على مستوى الشركة: إضافة، إيقاف، أو إعادة تنشيط، مع الاحتفاظ بسجل الحركة."),
+  click(() => $("aeName"), "اكتب اسم الموظف التجريبي.", { onClick: () => { $("aeName").value = "ياسر عبد الله"; } }),
+  info(() => $("aeJob"), "حدد المسمى الوظيفي."),
+  info(() => $("aeBranch").closest(".grid2"), "حدد الفرع والشفت."),
+  click(() => $("aeHireBtn"), "حدد تاريخ التعيين."),
+  click(() => q1('.mdp-month-num[data-month="10"]'), "اختار أكتوبر.", { anchor: MDPC }),
+  click(() => q1('.mdp-num[data-day="1"]'), "اختار يوم 1.", { anchor: MDPC }),
+  click(() => q1(".mdp-ok"), "أكد الاختيار.", { anchor: MDPC }),
+  click(() => $("aeAddBtn"), "أضف الموظف للنظام."),
+  info(() => $("aeTbody").closest(".sheet"), "بيانات الموظف وحالته بتظهر في سجل مركزي واحد، بما يشمل الفرع والشفت وتاريخ التعيين وحالة المباشرة."),
+  click(() => { const tr = centralTrFirst(); return tr ? tr.querySelector("[data-suspend]") : null; }, "من صف الموظف تقدر تبدأ إجراء الإيقاف."),
+  click(() => $("confirmSuspendBtn"), "أكد الإيقاف. يُستبعد من الجداول من تاريخ سريان الإيقاف، وسجله السابق محفوظ.", { anchor: MODAL }),
+  click(() => { const tr = centralTrFirst(); return tr ? tr.querySelector("[data-resume]") : null; }, "ولو اتقرر رجوعه للعمل، يمكن إعادة تنشيطه مع استمرار الاحتفاظ بتاريخ الحركات."),
+  click(() => $("aeBack"), "ارجع لقائمة الفروع."),
+  click(() => $("alertsBtn"), "افتح سجل التحركات والتنبيهات لمراجعة ما حدث."),
+  info(() => $("alertList"), "السجل بيجمع الحركات المهمة: تعديلات الأيام، ونقل الموظفين وإضافتهم وإيقافهم، وتغييرات الوظائف والتارجت والإعدادات. بدل البحث في رسائل ومحادثات، يبقى فيه مرجع واحد للمراجعة."),
+  click(() => $("alertsBack"), "ارجع للفروع."),
+
+  /* الإشعارات: الانتقال المباشر */
+  info(() => $("notifBadge"), "الإشعارات بتلفت نظرك لأي حركة جديدة من الفروع، بدل ما تعتمد المتابعة على إن حد يفتكر يبعت رسالة أو صورة."),
+  click(() => $("notifBellBtn"), "افتح الإشعارات."),
+  info(() => $("notifListContainer"), "كل إشعار موضح فيه الفرع وملخص الحركة، والضغط عليه يفتح مكان الواقعة مباشرة. يعني المراجعة تبدأ من الحدث نفسه، مش من البحث وسط ملفات.", { anchor: MODAL }),
+  click(() => qa("#notifListContainer .card").find(c => c.textContent.includes("بتعديل")) || null, "افتح إشعار تعديل البيانات.", { anchor: MODAL }),
+  info(() => $("row_day_1"), "الميزة هنا إن تسجيل مدير الفرع بيظهر عندك كسطر جاهز مرتبط بالموظف واليوم، من غير إعادة إدخال. دورك يبقى مراجعة دقة البيانات. وكمان الضغط على الإشعار وصّلك مباشرة لملف الموظف والتعديل، مع عرض القيمة قبل التعديل وبعده.."),
+  info(() => q1("#sheetContainer .row-old"), "هنا تقدر تقارن التسجيل السابق بالتسجيل الحالي: القديم ظاهر بالأحمر والجديد بالأخضر. الهدف مش تعطيل التصحيح، لكن إن أي تغيير يفضل مفهوم وقابل للمراجعة."),
+  click(() => q1("#row_day_1 button"), "ولو محتاج توضيح من الفرع، تقدر تبعت تعليق مرتبط بنفس السطر."),
+  click(() => $("centralCommentInput"), "اكتب الملاحظة.", { anchor: MODAL, onClick: () => { $("centralCommentInput").value = "يرجى مراجعة وقت الانصراف مع الموظف"; } }),
+  click(() => $("sendCommentBtn"), "أرسل التعليق. مدير الفرع هيوصله إشعار مرتبط بنفس الموضوع، فتفضل المراجعة والتصحيح داخل مسار واحد.", { anchor: MODAL }),
+
+  /* الراتب والملخص والمنصب */
+  click(() => $("toggleSalaryBtn"), "يمكن مراجعة أو تعديل الراتب الأساسي للموظف وفق الصلاحيات المعتمدة."),
+  click(() => $("salaryInput"), "أدخل القيمة التجريبية.", { onClick: () => { $("salaryInput").value = 7000; } }),
+  click(() => $("updateSalaryBtn"), "احفظ التحديث."),
+  click(() => $("toggleSummaryBtn"), "افتح ملخص الإجماليات."),
+  info(() => $("summaryPanel"), "بدل تجميع الأرقام من أكثر من مصدر، الملخص بيجمع أيام العمل الفعلية والإضافي والعجز والخصومات وصافي المستحقات، مع بيانات التارجت المرتبطة بالفرع."),
+  click(() => $("changeRoleBtn"), "ومن ملف الموظف يمكن تحديث المسمى الوظيفي عند اعتماد التغيير."),
+  info(() => $("roleSelectInput"), "اختار المسمى الجديد. النظام يربط ساعات الدوام الأساسية بالوظيفة المحددة.", { onNext: () => { $("roleSelectInput").value = "staff"; } }),
+  click(() => $("updateRoleBtn"), "أكد تغيير المسمى."),
+  info(() => $("printReceiptBtn"), "ممكن كمان تطبع الكشف النهائي مختصر مناسب للطابعة الحرارية، يوضح بيانات الموظف توضح المعلومات الحضرتك كنت بتكتبها يدوي الان بقت اتوماتك . لن نفتح الطباعة أثناء الجولة."),
+  info(() => $("suspendEmpBtn"), "ويمكن بدء إجراء إيقاف الموظف من ملفه مباشرة، وفق الصلاحيات."),
+
+  /* الموظف المنقول */
+  click(() => $("sheetBack"), "ارجع لقائمة الموظفين."),
+  click(() => $("empBack"), "ارجع لقائمة الفروع."),
+  click(() => qa("#branchList .card")[1] || null, "افتح الفرع الذي استقبل الموظف المنقول."),
+  click(() => qa("#empList .card").pop() || null, "افتح بطاقة الموظف المنقول لمراجعة سجله."),
+  info(() => $("sheetAlert"), "تاريخ النقل واضح في الملف، والتقرير بيفصل فترة عمل الموظف في كل فرع. وده يساعد على إسناد الأيام للفرع الصحيح عند المراجعة والحساب."),
+
+  /* ===== المرحلة 3: عودة مدير الفرع ===== */
+  click(() => $("logoutBtn"), "نرجع لواجهة مدير الفرع عشان نشوف دورة التواصل كاملة من الطرفين."),
+  keypad1(),
+  loginStep(),
+  info(() => $("notifBadge"), "وصل لمدير الفرع إشعار بتعليق الإدارة المركزية."),
+  click(() => $("notifBellBtn"), "افتح الإشعارات."),
+  click(() => q1("#notifListContainer .card"), "افتح التعليق؛ هتنتقل مباشرة لنفس الموظف واليوم المقصود.", { anchor: MODAL }),
+  info(() => q1("#dayList .day-card"), "من أهم التسهيلات إن مدير الفرع لما يضغط على الإشعار، يوصل مباشرة للتعديل المطلوب؛ مع بقاء أثر التعديل متاح للإدارة المركزية."),
+  { final: true, text: "وبكده نكون شفنا التصور من تسجيل الفرع، للحسابات، للمراجعة المركزية، وللتعليق والتصحيح. الفكرة الأساسية: تسجيل مرة واحدة، متابعة أوضح، وحركة كل تعديل تفضل قابلة للمراجعة، مع إمكانية استخراج كشف الموظف.\n\nوده لسه تصور أولي، مش نظام نهائي جاهز للتشغيل. لو حضرتك شايف الفكرة تستحق، فالخطوة الأهم إننا نقعد ونفهم دورة العمل الفعلية ومعايير المكتب: الصلاحيات، الإعدادات الفرعية والمركزية، شكل التقارير، والميزات المطلوبة أو اللي الأفضل الاستغناء عنها. بعدها نحدد إزاي ننتقل من الدفاتر الورقية للنظام تدريجيًا وبشكل آمن، ونجهز دليل استخدام وتدريب لمديري الفروع.\n\nأنا بدأت بالفعل في بناء النموذج وقطعت فيه شوط، لكن عشان يتحول لحل مناسب للمكتب لازم يتراجع ويتطور على أرض الواقع وبمشاركة أصحاب القرار وفريق التشغيل.\n\nحابب أعرف رأي حضرتك بصراحة: هل التصور ده شايفه يستحق إننا نطوره سوا لحد ما يبقى مناسب لاحتياج الفروع والإدارة؟" }
+];
+
+const FADE_SEL = [
+  ".screen.active button", ".screen.active input", ".screen.active select", ".screen.active h2",
+  ".screen.active .dcard", ".screen.active .demo", ".screen.active .day-title", ".screen.active .day-date",
+  ".screen.active .card.center b", ".screen.active .card.center small", ".screen.active .day-card",
+  ".modal.on button", ".modal.on .clock-digit", ".modal.on .clock-disp-num", ".modal.on b",
+  ".modal.on input", ".modal.on select", ".modal.on textarea", ".mdp-card button",
+  ".wa-app-bar .bar-btn"
+].join(",");
+
+function resetToLogin(){
+  document.querySelectorAll(".modal").forEach(m => m.classList.remove("on"));
+  qa(".mdp-overlay").forEach(m => m.remove());
+  session.role = null; session.branch = null; session.shift = null;
+  session.month = 9; session.week = 0; session.day = 1; session.empId = null;
+  document.body.classList.remove("central");
+  $("logoutBtn").style.display = "none"; $("notifBellBtn").style.display = "none"; $("centralSettingsBtn").style.display = "none";
+  $("pinInput").value = ""; $("loginErr").textContent = "";
+  $("salaryPanel").style.display = "none"; $("summaryPanel").style.display = "none"; $("rolePanel").style.display = "none";
+  show("sLogin", "نظام الحضور والفروع", "تسجيل الدخول");
+}
+function tourStart(){
+  if (!tour.on) { tour.backup = S; tour.on = true; tour.timer = setInterval(tourTick, 150); }
+  S = seed();
+  addEmpState.hire = "2026-10-01"; branchAddState.hire = "2026-10-01";
+  tour.i = 0; tour.cnt = 0; tour.target = null; tour.scrolledFor = -1; tour.miss = 0;
+  resetToLogin();
+  $("pinInput").readOnly = true;
+  document.documentElement.classList.add("tour-on");
+  tourTick();
+}
+function tourStop(){
+  clearInterval(tour.timer); tour.on = false;
+  qa(".tour-target").forEach(x => x.classList.remove("tour-target"));
+  qa(".tour-fade").forEach(x => x.classList.remove("tour-fade"));
+  $("tourBubble").style.display = "none";
+  document.documentElement.classList.remove("tour-on");
+  if (tour.backup) { S = tour.backup; tour.backup = null; }
+  addEmpState.hire = todayIso(); branchAddState.hire = todayIso();
+  $("pinInput").readOnly = false;
+  resetToLogin();
+}
+function tourAdvance(){ tour.i++; tour.cnt = 0; tour.target = null; tour.miss = 0; setTimeout(tourTick, 30); }
+
+/* وضع الفقاعة: لا تغطي العنصر المستهدف أبداً */
+function placeBubble(st, t, lost){
+  const b = $("tourBubble");
+  if (!st.final && !t && !lost) { b.style.display = "none"; return; }
+  b.style.display = "block";
+  $("tbStep").textContent = st.final ? "النهاية" : "الخطوة " + (tour.i + 1) + " من " + (TOUR_STEPS.length - 1);
+  $("tbText").textContent = lost ? "تعذر إيجاد هذا العنصر في الشاشة الحالية. اضغط تخطي للمتابعة أو أوقف الدليل." : st.text + (st.need > 1 ? "  (" + tour.cnt + "/" + st.need + ")" : "");
+  $("tbFinish").style.display = st.final ? "" : "none";
+  $("tbStop").style.display = st.final ? "none" : "";
+  $("tbNext").style.display = (st.info || lost) && !st.final ? "" : "none";
+  $("tbNext").textContent = lost ? "تخطي" : "التالي";
+  $("tbSkip").style.display = (!st.final && !st.info && !lost) ? "" : "none";
+  const vw = window.innerWidth, vh = window.innerHeight, bw = Math.min(310, vw - 24);
+  b.style.width = bw + "px";
+  const bh = b.offsetHeight, M = 8, G = 12, TOP = 64;
+  let left, top, arrowCss = "display:none";
+  if (st.final || !t) { left = (vw - bw) / 2; top = Math.max(TOP, (vh - bh) / 2); }
+  else {
+    const tr = t.getBoundingClientRect();
+    const an = (st.anchor && q1(st.anchor) && vis(q1(st.anchor))) ? q1(st.anchor) : t;
+    const ar = an.getBoundingClientRect();
+    left = Math.min(Math.max(M, tr.left + tr.width / 2 - bw / 2), vw - bw - M);
+    const hit = tp => {
+      const x1 = Math.max(left, tr.left), x2 = Math.min(left + bw, tr.right);
+      const y1 = Math.max(tp, tr.top), y2 = Math.min(tp + bh, tr.bottom);
+      return Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+    };
+    let side = null;
+    const belowTop = ar.bottom + G, aboveTop = ar.top - bh - G;
+    if (belowTop + bh <= vh - M) { top = belowTop; side = "below"; }
+    else if (aboveTop >= TOP) { top = aboveTop; side = "above"; }
+    else {
+      const topDock = TOP, botDock = vh - bh - M;
+      top = hit(topDock) <= hit(botDock) ? topDock : botDock;
+    }
+    if (side && an === t) {
+      const ax = Math.min(Math.max(14, tr.left + tr.width / 2 - left - 7), bw - 28);
+      arrowCss = "display:block;left:" + ax + "px;" + (side === "below" ? "top:-14px;border-bottom-color:#111b21" : "bottom:-14px;border-top-color:#111b21");
+    }
+  }
+  b.style.left = left + "px"; b.style.top = top + "px";
+  $("tbArrow").style.cssText = arrowCss;
+}
+function tourTick(){
+  if (!tour.on) return;
+  const st = TOUR_STEPS[tour.i];
+  if (!st) { tourStop(); return; }
+  let t = null;
+  if (!st.final) { try { t = st.find(); } catch (e) {} if (!vis(t)) t = null; }
+  tour.target = t;
+  tour.miss = (t || st.final) ? 0 : tour.miss + 1;
+  qa(".tour-target").forEach(x => { if (x !== t) x.classList.remove("tour-target"); });
+  if (t && !t.classList.contains("tour-target")) t.classList.add("tour-target");
+  if (t || st.final) {
+    qa(FADE_SEL).forEach(c => {
+      const want = !!t && !t.contains(c) && !c.contains(t);
+      if (c.classList.contains("tour-fade") !== want) c.classList.toggle("tour-fade", want);
+    });
+  }
+  if (t && tour.scrolledFor !== tour.i) {
+    tour.scrolledFor = tour.i;
+    if (t.closest(".modal, .mdp-overlay")) t.scrollIntoView({ block: "nearest", inline: "nearest" });
+    else if (!t.closest(".wa-app-bar")) {
+      const r = t.getBoundingClientRect();
+      if (r.top < 70 || r.bottom > window.innerHeight - 20 || r.left < 0 || r.right > window.innerWidth) {
+        t.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+      }
+    }
+  }
+  placeBubble(st, t, tour.miss > 40);
+}
+document.addEventListener("click", ev => {
+  if (!tour.on) return;
+  if (ev.target.closest("#tourBubble, #tourBtn")) return;
+  const st = TOUR_STEPS[tour.i], t = tour.target;
+  if (st && !st.info && !st.final && t && t.contains(ev.target)) {
+    tour.cnt++;
+    if (st.onClick) st.onClick(ev);
+    if (tour.cnt >= (st.need || 1)) tourAdvance(); else tourTick();
+    return;
+  }
+  ev.preventDefault(); ev.stopPropagation();
+}, true);
+document.addEventListener("mousedown", ev => {
+  if (!tour.on) return;
+  if (ev.target.closest("#tourBubble, #tourBtn")) return;
+  const t = tour.target;
+  if (t && t.contains(ev.target)) return;
+  ev.stopPropagation(); ev.preventDefault();
+}, true);
+document.addEventListener("keydown", ev => {
+  if (tour.on && (ev.key === "Enter" || ev.key === "Escape")) { ev.preventDefault(); ev.stopPropagation(); }
+}, true);
+window.addEventListener("scroll", () => { if (tour.on) tourTick(); }, true);
+window.addEventListener("resize", () => { if (tour.on) tourTick(); });
+$("tourBtn").onclick = tourStart;
+$("tbStop").onclick = tourStop;
+$("tbFinish").onclick = tourStop;
+$("tbSkip").onclick = () => { const st = TOUR_STEPS[tour.i]; if (st && !st.final) tourAdvance(); };
+$("tbNext").onclick = () => {
+  const st = TOUR_STEPS[tour.i];
+  if (st && (st.info || tour.miss > 40)) { if (st.onNext) { try { st.onNext(); } catch (e) {} } tourAdvance(); }
+};
+
+/* بداية الموقع: الشاشة الترحيبية أولاً */
+resetToLogin();
+showOnboardSlide(0);
+show("sOnboarding", "نظام الحضور والفروع", "مرحباً بك");
+</script>
+</body>
+</html>
+
