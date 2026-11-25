@@ -1,15 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle,
+  ArrowLeftRight,
   ArrowRight,
   Building2,
   CalendarDays,
-  CheckCircle2,
-  Clock,
-  History,
+  Check,
+  CheckCheck,
   KeyRound,
+  Moon,
   Plus,
-  Settings,
+  Search,
+  Send,
+  Sun,
   Users,
 } from 'lucide-react';
 import {
@@ -27,6 +29,7 @@ import {
   AppState,
   AvailabilityRow,
   Branch,
+  ChatMessage,
   ComplianceReport,
   Employee,
   SessionState,
@@ -37,6 +40,13 @@ interface AdminControlViewProps {
   state: AppState;
   session: SessionState;
   selectedCompliance: ComplianceReport | null;
+  focusEvent?: {
+    branchId: string;
+    shift: ShiftType;
+    messageId?: string;
+    complianceReport?: ComplianceReport;
+    nonce: number;
+  } | null;
   onCloseComplianceModal: () => void;
   onSelectCompliance: (rep: ComplianceReport) => void;
   onChangeSession: (patch: Partial<SessionState>) => void;
@@ -51,15 +61,23 @@ interface BranchStatusRow {
   available: number;
   diff: number;
   submitted: boolean;
+  hasEdit: boolean;
+  lastEditAt?: string;
+  lastEditSummary?: string;
   availableRows: AvailabilityRow[];
   compliance: ComplianceReport | null;
   category: 'deficit' | 'surplus' | 'stable';
+  unreadCount: number;
+  lastMsg: ChatMessage | null;
 }
+
+type AdminSettingsSub = 'hub' | 'add_branch' | 'pins' | 'targets';
 
 export const AdminControlView: React.FC<AdminControlViewProps> = ({
   state,
   session,
   selectedCompliance,
+  focusEvent,
   onCloseComplianceModal,
   onSelectCompliance,
   onChangeSession,
@@ -70,13 +88,23 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
   const tomorrowIso = useMemo(() => addDaysIso(getCairoToday().iso, 1), []);
   const { adminScreen, adminShift } = session;
 
-  // Transfer modal state (when clicking a branch in Control Room)
-  const [inspectBranchId, setInspectBranchId] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [chatSearch, setChatSearch] = useState('');
+  const [chatFilter, setChatFilter] = useState<
+    'all' | 'deficit' | 'surplus' | 'stable' | 'pending'
+  >('all');
+  const [adminReplyInput, setAdminReplyInput] = useState('');
+  const [settingsSub, setSettingsSub] = useState<AdminSettingsSub>('hub');
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const msgRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Transfer modal
+  const [transferModalBranchId, setTransferModalBranchId] = useState<string | null>(null);
   const [transferEmp, setTransferEmp] = useState<AvailabilityRow | null>(null);
   const [transferToBranchId, setTransferToBranchId] = useState<string>('');
   const [transferMode, setTransferMode] = useState<'temporary' | 'final'>('temporary');
 
-  // Settings draft for required headcount per branch/shift
   const [reqDrafts, setReqDrafts] = useState<Record<string, Record<ShiftType, number>>>(() => {
     const map: Record<string, Record<ShiftType, number>> = {};
     state.branches.forEach((b) => {
@@ -85,7 +113,6 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
     return map;
   });
 
-  // Admin-only: PIN management drafts & New Branch form
   const [adminPinCurrent, setAdminPinCurrent] = useState('');
   const [adminPinNew, setAdminPinNew] = useState('');
   const [adminPinConfirm, setAdminPinConfirm] = useState('');
@@ -105,7 +132,6 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
     evening: 3,
   });
 
-  // Keep drafts synced when branches are added or updated
   useEffect(() => {
     setReqDrafts((prev) => {
       const next = { ...prev };
@@ -123,11 +149,16 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
     });
   }, [state.branches]);
 
-  // Compute branch statuses for tomorrow's active shift
-  const branchStatuses: BranchStatusRow[] = useMemo(() => {
+  useEffect(() => {
+    if (adminScreen === 'settings') {
+      setSettingsSub('hub');
+    }
+  }, [adminScreen]);
+
+  const computeStatusesForShift = (shift: 'morning' | 'evening'): BranchStatusRow[] => {
     return state.branches.map((b) => {
-      const sub = state.submissions[submissionKey(b.id, adminShift, tomorrowIso)];
-      const required = b.requiredByShift[adminShift] ?? 3;
+      const sub = state.submissions[submissionKey(b.id, shift, tomorrowIso)];
+      const required = b.requiredByShift[shift] ?? 3;
       const availableRows = sub
         ? sub.rows.filter((r) => !r.movedOut && r.status === 'available')
         : [];
@@ -138,18 +169,43 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
         if (diff < 0) category = 'deficit';
         else if (diff > 0) category = 'surplus';
       }
+      const msgs = state.messages.filter((m) => m.branchId === b.id);
+      const unreadMsgs = msgs.filter((m) => m.sender === 'branch' && !m.readByAdmin).length;
+      const unreadEmg = state.emergencyNotices.filter(
+        (e) => e.branchId === b.id && !e.acknowledged
+      ).length;
+
       return {
         branch: b,
         required,
         available,
         diff,
         submitted: !!sub,
+        hasEdit: Boolean(sub?.hasEdit),
+        lastEditAt: sub?.lastEditAt,
+        lastEditSummary: sub?.lastEditSummary,
         availableRows,
         compliance: sub?.compliance || null,
         category,
+        unreadCount: unreadMsgs > 0 ? unreadMsgs : unreadEmg,
+        lastMsg: msgs.length > 0 ? msgs[msgs.length - 1] : null,
       };
     });
-  }, [state.branches, state.submissions, adminShift, tomorrowIso]);
+  };
+
+  const morningStatuses = useMemo(
+    () => computeStatusesForShift('morning'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.branches, state.submissions, state.messages, state.emergencyNotices, tomorrowIso]
+  );
+
+  const eveningStatuses = useMemo(
+    () => computeStatusesForShift('evening'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.branches, state.submissions, state.messages, state.emergencyNotices, tomorrowIso]
+  );
+
+  const branchStatuses = adminShift === 'evening' ? eveningStatuses : morningStatuses;
 
   const deficits = branchStatuses.filter((b) => b.submitted && b.category === 'deficit');
   const surpluses = branchStatuses.filter((b) => b.submitted && b.category === 'surplus');
@@ -172,8 +228,84 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
     [state.notifications]
   );
 
-  const inspectRow = branchStatuses.find((s) => s.branch.id === inspectBranchId) || null;
-  const otherBranches = branchStatuses.filter((s) => s.branch.id !== inspectBranchId);
+  const filteredChats = useMemo(() => {
+    const list = branchStatuses.filter((row) => {
+      if (chatSearch.trim() && !row.branch.name.includes(chatSearch.trim())) return false;
+      if (chatFilter === 'deficit') return row.submitted && row.category === 'deficit';
+      if (chatFilter === 'surplus') return row.submitted && row.category === 'surplus';
+      if (chatFilter === 'stable') return row.submitted && row.category === 'stable';
+      if (chatFilter === 'pending') return !row.submitted;
+      return true;
+    });
+    return [...list].sort((a, b) => b.unreadCount - a.unreadCount);
+  }, [branchStatuses, chatSearch, chatFilter]);
+
+  const activeBranchRow = selectedChat
+    ? branchStatuses.find((s) => s.branch.id === selectedChat) || null
+    : null;
+
+  const activeChatMessages = useMemo(() => {
+    if (!activeBranchRow) return [];
+    return state.messages.filter((m) => m.branchId === activeBranchRow.branch.id);
+  }, [state.messages, activeBranchRow]);
+
+  useEffect(() => {
+    if (!focusEvent) return;
+    setSelectedChat(focusEvent.branchId);
+    const branchMsgs = state.messages.filter((m) => m.branchId === focusEvent.branchId);
+    const targetId =
+      focusEvent.messageId ||
+      [...branchMsgs]
+        .reverse()
+        .find((m) => m.shift === focusEvent.shift && m.sender === 'branch')?.id ||
+      branchMsgs[branchMsgs.length - 1]?.id;
+
+    if (targetId) {
+      setHighlightedMsgId(targetId);
+      setTimeout(() => {
+        msgRefs.current[targetId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 90);
+      const timer = setTimeout(() => setHighlightedMsgId(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [focusEvent?.nonce]);
+
+  useEffect(() => {
+    if (selectedChat && !highlightedMsgId) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [selectedChat, activeChatMessages.length, highlightedMsgId]);
+
+  const transferSourceRow =
+    branchStatuses.find((s) => s.branch.id === transferModalBranchId) || null;
+  const transferOtherBranches = useMemo(() => {
+    const others = branchStatuses.filter((s) => s.branch.id !== transferModalBranchId);
+    return [...others].sort((a, b) => {
+      const aDef = a.submitted && a.diff < 0 ? 1 : 0;
+      const bDef = b.submitted && b.diff < 0 ? 1 : 0;
+      return bDef - aDef;
+    });
+  }, [branchStatuses, transferModalBranchId]);
+
+  const handleMarkBranchMessagesRead = (branchId: string, singleMsgId?: string) => {
+    onUpdateState((prev) => ({
+      ...prev,
+      messages: prev.messages.map((m) => {
+        if (m.branchId !== branchId || m.sender !== 'branch') return m;
+        if (singleMsgId && m.id !== singleMsgId) return m;
+        return { ...m, readByAdmin: true };
+      }),
+      emergencyNotices: prev.emergencyNotices.map((e) =>
+        e.branchId === branchId ? { ...e, acknowledged: true } : e
+      ),
+      notifications: prev.notifications.map((n) =>
+        n.recipientRole === 'central' && n.branchId === branchId
+          ? { ...n, read: true }
+          : n
+      ),
+    }));
+    onNotify('تم تأكيد الاطلاع — تحولت علامة الصح للون الأزرق عند الفرع');
+  };
 
   const handleAckEmergency = (id: string) => {
     onUpdateState((prev) => ({
@@ -193,9 +325,66 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
     }));
   };
 
+  const handleSendAdminReply = () => {
+    if (!activeBranchRow) return;
+    const txt = adminReplyInput.trim();
+    if (!txt) return;
+
+    const timeNow = new Date().toLocaleTimeString('ar-EG', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const msgId = `msg_adm_${Date.now()}`;
+    const msg: ChatMessage = {
+      id: msgId,
+      branchId: activeBranchRow.branch.id,
+      sender: 'admin',
+      kind: 'text',
+      text: txt,
+      shift: adminShift,
+      shiftDate: tomorrowIso,
+      time: timeNow,
+      readByAdmin: true,
+      readByBranch: false,
+    };
+
+    onUpdateState((prev) => ({
+      ...prev,
+      messages: [
+        ...prev.messages.map((m) =>
+          m.branchId === activeBranchRow.branch.id && m.sender === 'branch'
+            ? { ...m, readByAdmin: true }
+            : m
+        ),
+        msg,
+      ],
+      notifications: [
+        ...prev.notifications,
+        {
+          id: `nadm_txt_${Date.now()}`,
+          kind: 'message',
+          senderRole: 'central',
+          senderName: 'الأدمن',
+          recipientRole: 'branch',
+          recipientBranchId: activeBranchRow.branch.id,
+          branchId: activeBranchRow.branch.id,
+          shift: adminShift,
+          shiftDate: tomorrowIso,
+          messageId: msgId,
+          text: `رسالة من الأدمن: ${txt}`,
+          time: timeNow,
+          read: false,
+        },
+      ],
+    }));
+
+    setAdminReplyInput('');
+  };
+
   const handleConfirmTransfer = () => {
-    if (!inspectRow || !transferEmp || !transferToBranchId) return;
-    const fromB = inspectRow.branch;
+    if (!transferSourceRow || !transferEmp || !transferToBranchId) return;
+    const fromB = transferSourceRow.branch;
     const toB = state.branches.find((b) => b.id === transferToBranchId);
     if (!toB) return;
 
@@ -203,13 +392,16 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
       hour: '2-digit',
       minute: '2-digit',
     });
+    const typeLabel =
+      transferMode === 'final' ? 'نقل نهائي' : 'نقل مؤقت لهذه الوردية';
+    const toText = `انضم إلى فرعكم الموظف ${transferEmp.empName} قادماً من فرع ${fromB.name} (${typeLabel})`;
+    const fromText = `تم نقل الموظف ${transferEmp.empName} من فرعكم إلى فرع ${toB.name} (${typeLabel})`;
 
     onUpdateState((prev) => {
       const fromKey = submissionKey(fromB.id, adminShift, tomorrowIso);
       const toKey = submissionKey(toB.id, adminShift, tomorrowIso);
       const nextSubmissions = { ...prev.submissions };
 
-      // Mark movedOut in source branch submission
       if (nextSubmissions[fromKey]) {
         const updatedFromRows = nextSubmissions[fromKey].rows.map((r) =>
           r.empId === transferEmp.empId
@@ -233,7 +425,6 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
         };
       }
 
-      // Add into target branch submission if already submitted
       if (nextSubmissions[toKey]) {
         const incomingRow: AvailabilityRow = {
           ...transferEmp,
@@ -250,7 +441,6 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
         };
       }
 
-      // If final transfer, move Employee record permanently
       let nextBranches = prev.branches;
       if (transferMode === 'final') {
         const empObj: Employee | undefined = prev.branches
@@ -269,13 +459,73 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
         }
       }
 
-      const typeLabel =
-        transferMode === 'final' ? 'نقل نهائي' : 'نقل مؤقت لهذه الوردية';
+      const msgInId = `msg_tr_in_${Date.now()}`;
+      const msgOutId = `msg_tr_out_${Date.now() + 1}`;
+      const transferMsgs: ChatMessage[] = [
+        {
+          id: msgInId,
+          branchId: toB.id,
+          sender: 'admin',
+          kind: 'transfer',
+          text: `${toText}\n(${SHIFT_FULL_AR[adminShift]} · ${fmtDateAr(tomorrowIso)})`,
+          shift: adminShift,
+          shiftDate: tomorrowIso,
+          time: timeNow,
+          readByAdmin: true,
+          readByBranch: false,
+        },
+        {
+          id: msgOutId,
+          branchId: fromB.id,
+          sender: 'admin',
+          kind: 'transfer',
+          text: `${fromText}\n(${SHIFT_FULL_AR[adminShift]} · ${fmtDateAr(tomorrowIso)})`,
+          shift: adminShift,
+          shiftDate: tomorrowIso,
+          time: timeNow,
+          readByAdmin: true,
+          readByBranch: false,
+        },
+      ];
 
       return {
         ...prev,
         branches: nextBranches,
         submissions: nextSubmissions,
+        messages: [...prev.messages, ...transferMsgs],
+        notifications: [
+          ...prev.notifications,
+          {
+            id: `ntr_in_${Date.now()}`,
+            kind: 'transfer',
+            senderRole: 'central',
+            senderName: 'الأدمن',
+            recipientRole: 'branch',
+            recipientBranchId: toB.id,
+            branchId: toB.id,
+            shift: adminShift,
+            shiftDate: tomorrowIso,
+            messageId: msgInId,
+            text: toText,
+            time: timeNow,
+            read: false,
+          },
+          {
+            id: `ntr_out_${Date.now() + 1}`,
+            kind: 'transfer',
+            senderRole: 'central',
+            senderName: 'الأدمن',
+            recipientRole: 'branch',
+            recipientBranchId: fromB.id,
+            branchId: fromB.id,
+            shift: adminShift,
+            shiftDate: tomorrowIso,
+            messageId: msgOutId,
+            text: fromText,
+            time: timeNow,
+            read: false,
+          },
+        ],
         transferNotices: [
           ...prev.transferNotices,
           {
@@ -283,7 +533,7 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
             targetBranchId: toB.id,
             shift: adminShift,
             shiftDate: tomorrowIso,
-            text: `انضم إلى فرعكم الموظف ${transferEmp.empName} قادماً من فرع ${fromB.name}`,
+            text: toText,
             typeLabel,
             time: timeNow,
             acknowledged: false,
@@ -293,31 +543,23 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
             targetBranchId: fromB.id,
             shift: adminShift,
             shiftDate: tomorrowIso,
-            text: `تم نقل الموظف ${transferEmp.empName} من فرعكم إلى فرع ${toB.name}`,
+            text: fromText,
             typeLabel,
             time: timeNow,
             acknowledged: false,
           },
         ],
-        audit: [
-          ...prev.audit,
-          {
-            id: Date.now(),
-            time: timeNow,
-            text: `نقل ${transferEmp.empName} من ${fromB.name} إلى ${toB.name} (${typeLabel})`,
-          },
-        ],
       };
     });
 
-    onNotify(`تم اعتماد نقل ${transferEmp.empName} إلى فرع ${toB.name}`);
+    onNotify(`تم إرسال قرار نقل ${transferEmp.empName} في محادثتي الفرعين`);
     setTransferEmp(null);
-    setInspectBranchId(null);
+    setTransferModalBranchId(null);
   };
 
-  // ==========================================
-  // SCREEN: ADMIN SETTINGS (إضافة فرع + كلمات السر + العدد المطلوب)
-  // ==========================================
+  // =========================================================
+  // SCREEN: CENTERED ADMIN SETTINGS HUB (NO HISTORY)
+  // =========================================================
   if (adminScreen === 'settings') {
     const handleAddBranch = () => {
       const name = newBranchName.trim();
@@ -352,22 +594,9 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
         },
       };
 
-      const timeNow = new Date().toLocaleTimeString('ar-EG', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-
       onUpdateState((prev) => ({
         ...prev,
         branches: [...prev.branches, newBranch],
-        audit: [
-          ...prev.audit,
-          {
-            id: Date.now(),
-            time: timeNow,
-            text: `إضافة فرع جديد: ${name} (رمز الدخول ${pin})`,
-          },
-        ],
       }));
       setNewBranchName('');
       setNewBranchPin('');
@@ -395,21 +624,9 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
         onNotify('هذا الرمز مستخدم لأحد الفروع، اختر رمزاً مختلفاً');
         return;
       }
-      const timeNow = new Date().toLocaleTimeString('ar-EG', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
       onUpdateState((prev) => ({
         ...prev,
         adminPin: next,
-        audit: [
-          ...prev.audit,
-          {
-            id: Date.now(),
-            time: timeNow,
-            text: `تحديث كلمة سر الأدمن المركزي`,
-          },
-        ],
       }));
       setAdminPinCurrent('');
       setAdminPinNew('');
@@ -430,623 +647,1055 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
         onNotify('هذا الرمز مستخدم بالفعل لفرع آخر أو للأدمن');
         return;
       }
-      const timeNow = new Date().toLocaleTimeString('ar-EG', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
       onUpdateState((prev) => ({
         ...prev,
         branches: prev.branches.map((item) =>
           item.id === b.id ? { ...item, pin: nextPin } : item
         ),
-        audit: [
-          ...prev.audit,
-          {
-            id: Date.now(),
-            time: timeNow,
-            text: `تعديل رمز دخول فرع ${b.name} إلى ${nextPin}`,
-          },
-        ],
       }));
       onNotify(`تم تحديث كلمة سر فرع ${b.name}`);
     };
 
+    if (settingsSub === 'hub') {
+      const hubCards = [
+        {
+          id: 'targets' as AdminSettingsSub,
+          title: 'العدد المطلوب لكل فرع',
+          desc: 'تحديد العدد المطلوب للصباحي والمسائي لحساب العجز والفائض',
+          icon: Users,
+          badge: `${state.branches.length} فرع`,
+          color: 'bg-[#e7fce3] text-[#008069]',
+        },
+        {
+          id: 'add_branch' as AdminSettingsSub,
+          title: 'إضافة فرع جديد',
+          desc: 'تسجيل فرع جديد وإعطاؤه رمز دخول خاص',
+          icon: Building2,
+          badge: 'جديد',
+          color: 'bg-amber-100 text-amber-800',
+        },
+        {
+          id: 'pins' as AdminSettingsSub,
+          title: 'كلمات السر',
+          desc: 'تعديل كلمة سر الأدمن أو أي فرع (صلاحية الأدمن فقط)',
+          icon: KeyRound,
+          badge: 'أمان',
+          color: 'bg-[#e7fce3] text-[#008069]',
+        },
+      ];
+
+      return (
+        <div className="flex min-h-[68vh] items-center justify-center px-2 py-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-[#d1d7db] bg-white p-6 shadow-sm sm:p-8">
+            <div className="mb-6 text-center">
+              <div className="text-xs font-extrabold text-[#008069]">
+                الأدمن
+              </div>
+              <h1 className="mt-1 text-xl font-extrabold text-[#111b21]">
+                الإعدادات الأساسية
+              </h1>
+              <p className="mt-1 text-xs font-semibold text-[#54656f]">
+                اختر الإعداد الذي تريد فتحه مباشرة
+              </p>
+            </div>
+
+            <div className="grid gap-3.5 sm:grid-cols-3">
+              {hubCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => setSettingsSub(card.id)}
+                    className="flex flex-col justify-between rounded-2xl border border-[#d1d7db] bg-[#f8fafc] p-5 text-right transition-all hover:border-[#008069] hover:bg-[#f0f9f4]"
+                  >
+                    <div>
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div
+                          className={`flex h-11 w-11 items-center justify-center rounded-full ${card.color}`}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-extrabold text-[#54656f] shadow-xs">
+                          {card.badge}
+                        </span>
+                      </div>
+                      <div className="text-base font-extrabold text-[#111b21]">
+                        {card.title}
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-[#54656f]">
+                        {card.desc}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => onChangeSession({ adminScreen: 'control' })}
+                className="flex min-h-[42px] items-center gap-1.5 rounded-full border border-[#d1d7db] bg-[#f0f2f5] px-6 py-2 text-xs font-extrabold text-[#111b21] hover:bg-[#e9edef]"
+              >
+                <ArrowRight className="h-4 w-4 text-[#008069]" />
+                <span>عودة لمحادثات الفروع</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="mx-auto max-w-3xl space-y-5">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-extrabold text-slate-900">
-            إعدادات الأدمن وإدارة الفروع
-          </h1>
+      <div className="mx-auto max-w-2xl space-y-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d1d7db] bg-white px-4 py-3 shadow-xs">
+          <button
+            type="button"
+            onClick={() => setSettingsSub('hub')}
+            className="flex min-h-[38px] items-center gap-1.5 rounded-full border border-[#d1d7db] bg-[#f0f2f5] px-4 py-1.5 text-xs font-extrabold text-[#111b21] hover:bg-[#e9edef]"
+          >
+            <ArrowRight className="h-3.5 w-3.5 text-[#008069]" />
+            <span>قائمة الإعدادات</span>
+          </button>
+
           <button
             type="button"
             onClick={() => onChangeSession({ adminScreen: 'control' })}
-            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+            className="flex min-h-[38px] items-center gap-1 rounded-full bg-[#008069] px-4 py-1.5 text-xs font-extrabold text-white hover:bg-[#016b58]"
           >
-            <ArrowRight className="h-3.5 w-3.5" />
-            <span>عودة لغرفة التحكم</span>
+            <span>عودة للمحادثات</span>
           </button>
         </div>
 
-        {/* 1. إضافة فرع جديد */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-amber-700" />
-            <h2 className="text-base font-extrabold text-slate-900">إضافة فرع جديد</h2>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-bold text-slate-600">
-                اسم الفرع الجديد
-              </label>
-              <input
-                type="text"
-                placeholder="مثال: المعادي"
-                value={newBranchName}
-                onChange={(e) => setNewBranchName(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold outline-none focus:border-slate-900"
-              />
+        {settingsSub === 'add_branch' && (
+          <div className="rounded-2xl border border-[#d1d7db] bg-white p-5 shadow-xs">
+            <div className="mb-3 flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-[#008069]" />
+              <h2 className="text-base font-extrabold text-[#111b21]">إضافة فرع جديد</h2>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-bold text-slate-600">
-                كلمة سر الفرع (PIN)
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                dir="ltr"
-                placeholder={`مثال: 1234${state.branches.length + 1}`}
-                value={newBranchPin}
-                onChange={(e) => setNewBranchPin(normalizeDigits(e.target.value))}
-                className="font-mono-num w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold outline-none focus:border-slate-900"
-              />
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {(['morning', 'evening'] as ShiftType[]).map((sh) => (
-              <div key={sh}>
-                <label className="mb-1 block text-[11px] font-bold text-slate-500">
-                  المطلوب ({SHIFTS_AR[sh]})
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-bold text-[#54656f]">
+                  اسم الفرع الجديد
                 </label>
                 <input
-                  type="number"
-                  min={0}
-                  max={20}
-                  value={newBranchReq[sh]}
-                  onChange={(e) =>
-                    setNewBranchReq((prev) => ({
-                      ...prev,
-                      [sh]: Math.max(0, Number(e.target.value) || 0),
-                    }))
-                  }
-                  className="font-mono-num w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-center text-sm font-bold"
+                  type="text"
+                  placeholder="مثال: المعادي"
+                  value={newBranchName}
+                  onChange={(e) => setNewBranchName(e.target.value)}
+                  className="min-h-[44px] w-full rounded-xl border border-[#d1d7db] px-3 py-2 text-sm font-bold outline-none focus:border-[#008069]"
                 />
               </div>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={handleAddBranch}
-            className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800"
-          >
-            <Plus className="h-4 w-4 text-amber-300" />
-            <span>إضافة الفرع</span>
-          </button>
-        </div>
-
-        {/* 2. تغيير كلمات السر (للأدمن فقط) */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
-          <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-amber-700" />
-            <h2 className="text-base font-extrabold text-slate-900">
-              إدارة كلمات السر (صلاحية الأدمن فقط)
-            </h2>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-extrabold text-slate-800">
-                تغيير كلمة سر الأدمن المركزي
-              </span>
-              <span className="font-mono-num text-xs font-bold text-slate-500">
-                الحالي: {state.adminPin}
-              </span>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-[#54656f]">
+                  كلمة سر الفرع (PIN)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder={`مثال: 1234${state.branches.length + 1}`}
+                  value={newBranchPin}
+                  onChange={(e) => setNewBranchPin(normalizeDigits(e.target.value))}
+                  className="font-mono-num min-h-[44px] w-full rounded-xl border border-[#d1d7db] px-3 py-2 text-sm font-bold outline-none focus:border-[#008069]"
+                />
+              </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <input
-                type="password"
-                inputMode="numeric"
-                dir="ltr"
-                placeholder="الرمز الحالي"
-                value={adminPinCurrent}
-                onChange={(e) => setAdminPinCurrent(normalizeDigits(e.target.value))}
-                className="font-mono-num rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
-              />
-              <input
-                type="password"
-                inputMode="numeric"
-                dir="ltr"
-                placeholder="الرمز الجديد (4+)"
-                value={adminPinNew}
-                onChange={(e) => setAdminPinNew(normalizeDigits(e.target.value))}
-                className="font-mono-num rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
-              />
-              <input
-                type="password"
-                inputMode="numeric"
-                dir="ltr"
-                placeholder="تأكيد الجديد"
-                value={adminPinConfirm}
-                onChange={(e) => setAdminPinConfirm(normalizeDigits(e.target.value))}
-                className="font-mono-num rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
-              />
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {(['morning', 'evening'] as ShiftType[]).map((sh) => (
+                <div key={sh}>
+                  <label className="mb-1 block text-xs font-bold text-[#54656f]">
+                    المطلوب ({SHIFTS_AR[sh]})
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={newBranchReq[sh]}
+                    onChange={(e) =>
+                      setNewBranchReq((prev) => ({
+                        ...prev,
+                        [sh]: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    className="font-mono-num min-h-[42px] w-full rounded-xl border border-[#d1d7db] px-2.5 py-1.5 text-center text-sm font-bold"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAddBranch}
+              className="mt-4 flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-full bg-[#008069] py-2.5 text-sm font-extrabold text-white hover:bg-[#016b58]"
+            >
+              <Plus className="h-4 w-4" />
+              <span>إضافة الفرع</span>
+            </button>
+          </div>
+        )}
+
+        {settingsSub === 'pins' && (
+          <div className="space-y-5 rounded-2xl border border-[#d1d7db] bg-white p-5 shadow-xs">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-[#008069]" />
+              <h2 className="text-base font-extrabold text-[#111b21]">
+                كلمات السر (صلاحية الأدمن فقط)
+              </h2>
+            </div>
+
+            <div className="rounded-xl border border-[#e9edef] bg-[#f8fafc] p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-extrabold text-[#111b21]">
+                  تغيير كلمة سر الأدمن
+                </span>
+                <span className="font-mono-num text-xs font-bold text-[#54656f]">
+                  الحالي: {state.adminPin}
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder="الرمز الحالي"
+                  value={adminPinCurrent}
+                  onChange={(e) => setAdminPinCurrent(normalizeDigits(e.target.value))}
+                  className="font-mono-num rounded-xl border border-[#d1d7db] bg-white px-3 py-2 text-sm outline-none focus:border-[#008069]"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder="الرمز الجديد (4+)"
+                  value={adminPinNew}
+                  onChange={(e) => setAdminPinNew(normalizeDigits(e.target.value))}
+                  className="font-mono-num rounded-xl border border-[#d1d7db] bg-white px-3 py-2 text-sm outline-none focus:border-[#008069]"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder="تأكيد الجديد"
+                  value={adminPinConfirm}
+                  onChange={(e) => setAdminPinConfirm(normalizeDigits(e.target.value))}
+                  className="font-mono-num rounded-xl border border-[#d1d7db] bg-white px-3 py-2 text-sm outline-none focus:border-[#008069]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleChangeAdminPin}
+                className="mt-3 min-h-[40px] rounded-full bg-[#008069] px-5 py-2 text-xs font-extrabold text-white hover:bg-[#016b58]"
+              >
+                تحديث كلمة سر الأدمن
+              </button>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-extrabold text-[#54656f]">
+                كلمات سر دخول الفروع
+              </h3>
+              <div className="divide-y divide-[#e9edef] rounded-xl border border-[#e9edef]">
+                {state.branches.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5"
+                  >
+                    <div>
+                      <span className="text-sm font-extrabold text-[#111b21]">{b.name}</span>
+                      <span className="font-mono-num mr-2 text-xs text-[#667781]">
+                        (الحالي: {b.pin})
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        dir="ltr"
+                        value={branchPinDrafts[b.id] ?? b.pin}
+                        onChange={(e) =>
+                          setBranchPinDrafts((prev) => ({
+                            ...prev,
+                            [b.id]: normalizeDigits(e.target.value),
+                          }))
+                        }
+                        className="font-mono-num w-28 rounded-xl border border-[#d1d7db] px-2.5 py-1.5 text-center text-xs font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateBranchPin(b)}
+                        className="rounded-full border border-[#d1d7db] bg-white px-3.5 py-1.5 text-xs font-extrabold text-[#111b21] hover:bg-[#f0f2f5]"
+                      >
+                        حفظ الرمز
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {settingsSub === 'targets' && (
+          <div className="rounded-2xl border border-[#d1d7db] bg-white p-5 shadow-xs">
+            <h2 className="mb-1 text-base font-extrabold text-[#111b21]">
+              العدد المطلوب لكل فرع
+            </h2>
+            <p className="mb-4 text-xs text-[#54656f]">
+              تحديد العدد المطلوب لتصنيف الفروع تلقائياً (أحمر عجز · أصفر فائض · أخضر مستقر)
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-right text-xs">
+                <thead>
+                  <tr className="border-b border-[#e9edef] bg-[#f0f2f5] font-bold text-[#54656f]">
+                    <th className="px-3 py-2.5">الفرع</th>
+                    <th className="px-3 py-2.5 text-center">صباحي</th>
+                    <th className="px-3 py-2.5 text-center">مسائي</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e9edef]">
+                  {state.branches.map((b) => (
+                    <tr key={b.id}>
+                      <td className="px-3 py-2.5 font-extrabold text-[#111b21]">
+                        {b.name}
+                      </td>
+                      {(['morning', 'evening'] as ShiftType[]).map((sh) => (
+                        <td key={sh} className="px-3 py-2 text-center">
+                          <input
+                            type="number"
+                            min={0}
+                            max={20}
+                            value={reqDrafts[b.id]?.[sh] ?? b.requiredByShift[sh]}
+                            onChange={(e) => {
+                              const val = Math.max(0, Number(e.target.value) || 0);
+                              setReqDrafts((prev) => ({
+                                ...prev,
+                                [b.id]: { ...prev[b.id], [sh]: val },
+                              }));
+                            }}
+                            className="font-mono-num w-16 rounded-xl border border-[#d1d7db] px-2 py-1 text-center text-sm font-bold"
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             <button
               type="button"
-              onClick={handleChangeAdminPin}
-              className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
+              onClick={() => {
+                onUpdateState((prev) => ({
+                  ...prev,
+                  branches: prev.branches.map((b) => ({
+                    ...b,
+                    requiredByShift: reqDrafts[b.id] || b.requiredByShift,
+                  })),
+                }));
+                onNotify('تم حفظ الأعداد المطلوبة للفروع');
+                onChangeSession({ adminScreen: 'control' });
+              }}
+              className="mt-4 min-h-[46px] w-full rounded-full bg-[#008069] py-2.5 text-sm font-extrabold text-white hover:bg-[#016b58]"
             >
-              تحديث كلمة سر الأدمن
+              حفظ الأعداد المطلوبة
             </button>
           </div>
-
-          <div>
-            <h3 className="mb-2 text-xs font-extrabold text-slate-700">
-              كلمات سر دخول الفروع
-            </h3>
-            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {state.branches.map((b) => (
-                <div
-                  key={b.id}
-                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
-                >
-                  <div>
-                    <span className="text-sm font-bold text-slate-900">{b.name}</span>
-                    <span className="font-mono-num mr-2 text-xs text-slate-400">
-                      (الحالي: {b.pin})
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      dir="ltr"
-                      value={branchPinDrafts[b.id] ?? b.pin}
-                      onChange={(e) =>
-                        setBranchPinDrafts((prev) => ({
-                          ...prev,
-                          [b.id]: normalizeDigits(e.target.value),
-                        }))
-                      }
-                      className="font-mono-num w-28 rounded-lg border border-slate-300 px-2.5 py-1.5 text-center text-xs font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateBranchPin(b)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:bg-slate-50"
-                    >
-                      حفظ الرمز
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 3. إعدادات العدد المطلوب لكل فرع */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="mb-1 text-base font-extrabold text-slate-900">
-            إعدادات العدد المطلوب لكل فرع
-          </h2>
-          <p className="mb-4 text-xs text-slate-500">
-            حدد العدد المطلوب في كل وردية ليقوم النظام بتصنيف الفروع تلقائياً (عجز / فائض / مستقر).
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-right text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-600">
-                  <th className="px-3 py-2.5">الفرع</th>
-                  <th className="px-3 py-2.5 text-center">صباحي</th>
-                  <th className="px-3 py-2.5 text-center">مسائي</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {state.branches.map((b) => (
-                  <tr key={b.id}>
-                    <td className="px-3 py-2.5 font-extrabold text-slate-900">
-                      {b.name}{' '}
-                      <span className="font-mono-num text-[11px] font-normal text-slate-400">
-                        ({b.pin})
-                      </span>
-                    </td>
-                    {(['morning', 'evening'] as ShiftType[]).map((sh) => (
-                      <td key={sh} className="px-3 py-2 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          max={20}
-                          value={reqDrafts[b.id]?.[sh] ?? b.requiredByShift[sh]}
-                          onChange={(e) => {
-                            const val = Math.max(0, Number(e.target.value) || 0);
-                            setReqDrafts((prev) => ({
-                              ...prev,
-                              [b.id]: { ...prev[b.id], [sh]: val },
-                            }));
-                          }}
-                          className="font-mono-num w-16 rounded-lg border border-slate-300 px-2 py-1 text-center text-sm font-bold"
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              onUpdateState((prev) => ({
-                ...prev,
-                branches: prev.branches.map((b) => ({
-                  ...b,
-                  requiredByShift: reqDrafts[b.id] || b.requiredByShift,
-                })),
-              }));
-              onNotify('تم حفظ الأعداد المطلوبة للفروع');
-              onChangeSession({ adminScreen: 'control' });
-            }}
-            className="mt-4 w-full rounded-xl bg-slate-900 py-3 text-sm font-extrabold text-white hover:bg-slate-800"
-          >
-            حفظ الأعداد المطلوبة
-          </button>
-        </div>
+        )}
       </div>
     );
   }
 
-  // ==========================================
-  // SCREEN: ADMIN HISTORY
-  // ==========================================
-  if (adminScreen === 'history') {
+  // =========================================================
+  // TRAFFIC-LIGHT STYLING HELPERS (Red=Deficit, Yellow=Surplus, Green=Stable)
+  // =========================================================
+  const getTrafficStyles = (row: BranchStatusRow) => {
+    if (!row.submitted) {
+      return {
+        card: 'border-[#e9edef] bg-[#f8fafc] text-[#54656f]',
+        avatar: 'bg-[#f0f2f5] text-[#54656f]',
+        badge: 'bg-white text-[#54656f] border border-[#e9edef]',
+        dot: 'bg-[#aebac1]',
+        label: 'انتظار',
+      };
+    }
+    if (row.category === 'deficit') {
+      return {
+        card: 'border-rose-300 bg-rose-50 text-rose-950',
+        avatar: 'bg-rose-100 text-rose-800',
+        badge: 'bg-rose-600 text-white',
+        dot: 'bg-rose-600',
+        label: `عجز ${Math.abs(row.diff)}`,
+      };
+    }
+    if (row.category === 'surplus') {
+      return {
+        card: 'border-amber-300 bg-amber-50 text-amber-950',
+        avatar: 'bg-amber-100 text-amber-900',
+        badge: 'bg-amber-400 text-amber-950',
+        dot: 'bg-amber-500',
+        label: `فائض +${row.diff}`,
+      };
+    }
+    return {
+      card: 'border-[#86efac] bg-[#e7fce3] text-[#006e5a]',
+      avatar: 'bg-[#d9fdd3] text-[#006e5a]',
+      badge: 'bg-[#008069] text-white',
+      dot: 'bg-[#008069]',
+      label: 'مستقر',
+    };
+  };
+
+  const renderShiftColumnCard = (
+    shiftKey: 'morning' | 'evening',
+    rows: BranchStatusRow[]
+  ) => {
+    const sorted = [...rows].sort((a, b) => {
+      const rank = (r: BranchStatusRow) =>
+        !r.submitted ? 3 : r.category === 'deficit' ? 0 : r.category === 'surplus' ? 1 : 2;
+      return rank(a) - rank(b);
+    });
+
     return (
-      <div className="mx-auto max-w-3xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-extrabold text-slate-900">
-            سجل الإرسالات والمطابقة والتحويلات
-          </h1>
-          <button
-            type="button"
-            onClick={() => onChangeSession({ adminScreen: 'control' })}
-            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
-          >
-            <ArrowRight className="h-3.5 w-3.5" />
-            <span>عودة لغرفة التحكم</span>
-          </button>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          {state.audit.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">
-              لا توجد حركات مسجلة بعد.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {[...state.audit].reverse().map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-center justify-between gap-3 py-3 text-sm"
-                >
-                  <span className="font-semibold text-slate-800">{a.text}</span>
-                  <span className="font-mono-num shrink-0 text-xs text-slate-400">
-                    {a.time}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // SCREEN: CONTROL ROOM (غرفة التحكم التشغيلية)
-  // ==========================================
-  const renderBranchRow = (row: BranchStatusRow) => (
-    <button
-      key={row.branch.id}
-      id={`adminBranchCard_${row.branch.id}`}
-      type="button"
-      onClick={() => {
-        setInspectBranchId(row.branch.id);
-        setTransferEmp(null);
-      }}
-      className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-right transition-colors hover:border-slate-400"
-    >
-      <div className="flex items-center gap-3">
-        <span className="text-base font-extrabold text-slate-900">
-          {row.branch.name}
-        </span>
-        {row.submitted && row.compliance && (
-          <span
-            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold ${
-              row.compliance.status === 'matched'
-                ? 'bg-emerald-50 text-emerald-700'
-                : 'bg-amber-50 text-amber-800'
+      <div className="rounded-2xl border border-[#d1d7db] bg-white p-4 shadow-xs">
+        <div className="mb-3 flex items-center gap-2.5 border-b border-[#e9edef] pb-3">
+          <div
+            className={`flex h-9 w-9 items-center justify-center rounded-full ${
+              shiftKey === 'morning'
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-[#008069] text-white'
             }`}
           >
-            {row.compliance.status === 'matched' ? (
-              <>
-                <CheckCircle2 className="h-3 w-3" />
-                <span>مطابق للخطة</span>
-              </>
+            {shiftKey === 'morning' ? (
+              <Sun className="h-5 w-5" />
             ) : (
-              <>
-                <AlertTriangle className="h-3 w-3" />
-                <span>اختلاف عن الخطة ({row.compliance.diffs.length})</span>
-              </>
+              <Moon className="h-5 w-5" />
             )}
-          </span>
-        )}
-        {!row.submitted && (
-          <span className="flex items-center gap-1 text-xs font-semibold text-slate-400">
-            <Clock className="h-3 w-3" />
-            <span>لم يُرسل بعد</span>
-          </span>
-        )}
-      </div>
-
-      <div className="font-mono-num text-sm font-extrabold text-slate-800">
-        {row.submitted ? (
-          <>
-            {row.available} / {row.required}{' '}
-            {row.diff !== 0 && (
-              <span className={row.diff > 0 ? 'text-emerald-700' : 'text-rose-700'}>
-                ({row.diff > 0 ? `+${row.diff}` : row.diff})
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="text-xs font-semibold text-slate-400">
-            المطلوب: {row.required}
-          </span>
-        )}
-      </div>
-    </button>
-  );
-
-  return (
-    <div className="mx-auto max-w-4xl space-y-5">
-      {/* Control Room Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900">
-            غرفة التحكم التشغيلية
-          </h1>
-          <p className="text-xs font-semibold text-slate-500">
-            جاهزية الفروع قبل الشفت بيوم · {fmtDateAr(tomorrowIso)}
-          </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-extrabold text-[#111b21] sm:text-base">
+              {shiftKey === 'morning' ? 'الوردية الصباحية (غداً)' : 'الوردية المسائية (غداً)'}
+            </h3>
+            <p className="text-[11px] font-bold text-[#54656f]">
+              أحمر: عجز · أصفر: فائض · أخضر: مستقر
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg bg-slate-200/70 p-1">
-            {(['morning', 'evening'] as ShiftType[]).map((sh) => (
+        <div className="space-y-2">
+          {sorted.map((row) => {
+            const st = getTrafficStyles(row);
+            return (
               <button
-                key={sh}
+                key={`${shiftKey}_${row.branch.id}`}
                 type="button"
-                onClick={() => onChangeSession({ adminShift: sh })}
-                className={`rounded-md px-3.5 py-1.5 text-xs font-bold transition-colors ${
-                  adminShift === sh
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 hover:text-slate-900'
+                onClick={() => {
+                  onChangeSession({ adminShift: shiftKey });
+                  setSelectedChat(row.branch.id);
+                }}
+                className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-right transition-all hover:opacity-90 ${st.card}`}
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className={`h-3 w-3 shrink-0 rounded-full ${st.dot}`} />
+                  <span className="truncate text-sm font-extrabold">
+                    فرع {row.branch.name}
+                  </span>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="font-mono-num text-xs font-extrabold">
+                    {row.submitted ? `${row.available}/${row.required}` : `--/${row.required}`}
+                  </span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${st.badge}`}>
+                    {st.label}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // =========================================================
+  // SCREEN: DIRECT BRANCH LIST & CHATS (NO SUMMARY / NO HISTORY)
+  // =========================================================
+  const showSidebarOnMobile = selectedChat === null;
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-[#d1d7db] bg-white shadow-sm lg:grid lg:h-[calc(100dvh-5.75rem)] lg:grid-cols-[360px_1fr]">
+      {/* RIGHT PANE: Direct Branch List with Side-by-Side Morning & Evening Status Pills */}
+      <aside
+        className={`flex flex-col border-l border-[#e9edef] bg-white ${
+          showSidebarOnMobile ? 'flex' : 'hidden lg:flex'
+        }`}
+      >
+        <div className="border-b border-[#e9edef] bg-[#f0f2f5] px-3 py-3">
+          <div className="mb-2 flex items-center justify-between text-xs font-extrabold text-[#111b21]">
+            <span>الفروع (غداً · {fmtDateAr(tomorrowIso)})</span>
+            <span className="text-[11px] font-bold text-[#54656f]">اختر الوردية</span>
+          </div>
+          {/* Big Prominent Morning & Evening Shift Buttons (100% Mobile-Friendly) */}
+          <div id="adminShiftButtons" className="grid grid-cols-2 gap-2">
+            <button
+              id="adminShiftBtn_morning"
+              type="button"
+              onClick={() => onChangeSession({ adminShift: 'morning' })}
+              className={`flex min-h-[54px] items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-base font-extrabold shadow-xs transition-all ${
+                adminShift === 'morning'
+                  ? 'bg-[#008069] text-white ring-2 ring-[#008069]/30'
+                  : 'border border-[#d1d7db] bg-white text-[#111b21] hover:bg-[#f8fafc]'
+              }`}
+            >
+              <Sun
+                className={`h-5 w-5 shrink-0 ${
+                  adminShift === 'morning' ? 'text-amber-300' : 'text-amber-600'
+                }`}
+              />
+              <span>صباحي</span>
+            </button>
+
+            <button
+              id="adminShiftBtn_evening"
+              type="button"
+              onClick={() => onChangeSession({ adminShift: 'evening' })}
+              className={`flex min-h-[54px] items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-base font-extrabold shadow-xs transition-all ${
+                adminShift === 'evening'
+                  ? 'bg-[#008069] text-white ring-2 ring-[#008069]/30'
+                  : 'border border-[#d1d7db] bg-white text-[#111b21] hover:bg-[#f8fafc]'
+              }`}
+            >
+              <Moon
+                className={`h-5 w-5 shrink-0 ${
+                  adminShift === 'evening' ? 'text-[#25d366]' : 'text-[#008069]'
+                }`}
+              />
+              <span>مسائي</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2 border-b border-[#e9edef] bg-white p-2.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#667781]" />
+            <input
+              type="text"
+              placeholder="ابحث عن فرع..."
+              value={chatSearch}
+              onChange={(e) => setChatSearch(e.target.value)}
+              className="w-full rounded-full bg-[#f0f2f5] py-2 pl-3 pr-9 text-xs font-bold text-[#111b21] outline-none focus:ring-1 focus:ring-[#008069]"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1">
+            {[
+              { id: 'all', label: `الكل (${branchStatuses.length})`, active: 'bg-[#111b21] text-white' },
+              { id: 'deficit', label: `عجز (${deficits.length})`, active: 'bg-rose-600 text-white' },
+              { id: 'surplus', label: `فائض (${surpluses.length})`, active: 'bg-amber-400 text-amber-950' },
+              { id: 'stable', label: `مستقر (${stables.length})`, active: 'bg-[#008069] text-white' },
+              { id: 'pending', label: `انتظار (${pendings.length})`, active: 'bg-[#54656f] text-white' },
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setChatFilter(f.id as typeof chatFilter)}
+                className={`flex-1 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-extrabold transition-colors ${
+                  chatFilter === f.id
+                    ? f.active
+                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]'
                 }`}
               >
-                {SHIFTS_AR[sh]}
+                {f.label}
               </button>
             ))}
           </div>
-
-          <button
-            type="button"
-            onClick={() => onChangeSession({ adminScreen: 'settings' })}
-            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-          >
-            <Settings className="h-3.5 w-3.5" />
-            <span>الإعدادات</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onChangeSession({ adminScreen: 'history' })}
-            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-          >
-            <History className="h-3.5 w-3.5" />
-            <span>السجل</span>
-          </button>
         </div>
-      </div>
 
-      {/* Live Plan Compliance Notifications Banner (The Core Merged Value) */}
-      {unreadComplianceNotifs.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-xs font-extrabold text-amber-800">
-            إشعارات مطابقة الخطة الأسبوعية ({unreadComplianceNotifs.length})
-          </h2>
-          {unreadComplianceNotifs.map((n) => (
-            <div
-              key={n.id}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5 ${
-                n.kind === 'compliance_ok'
-                  ? 'border-emerald-200 bg-emerald-50/70'
-                  : 'border-amber-300 bg-amber-50/70'
-              }`}
-            >
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                {n.kind === 'compliance_ok' ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" />
-                ) : (
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700" />
-                )}
-                <span>{n.text}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {n.complianceReport && (
-                  <button
-                    type="button"
-                    onClick={() => onSelectCompliance(n.complianceReport!)}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-800 hover:bg-slate-50"
-                  >
-                    التفاصيل
-                  </button>
-                )}
+        <div className="divide-y divide-[#e9edef] lg:flex-1 lg:overflow-y-auto">
+          {filteredChats.map((row) => {
+            const isSel = selectedChat === row.branch.id;
+            const st = getTrafficStyles(row);
+            const mRow = morningStatuses.find((x) => x.branch.id === row.branch.id)!;
+            const eRow = eveningStatuses.find((x) => x.branch.id === row.branch.id)!;
+            const mSt = getTrafficStyles(mRow);
+            const eSt = getTrafficStyles(eRow);
+
+            return (
+              <button
+                key={row.branch.id}
+                id={`adminBranchCard_${row.branch.id}`}
+                type="button"
+                onClick={() => setSelectedChat(row.branch.id)}
+                className={`flex w-full items-center gap-3 px-3.5 py-3 text-right transition-colors ${
+                  isSel ? 'bg-[#f0f2f5]' : 'bg-white hover:bg-[#f8fafc]'
+                }`}
+              >
+                <div
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${st.avatar}`}
+                >
+                  {row.branch.name.slice(0, 2)}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-extrabold text-[#111b21]">
+                      فرع {row.branch.name}
+                    </span>
+                    {row.unreadCount > 0 && (
+                      <span className="font-mono-num flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-extrabold text-white">
+                        {row.unreadCount}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Side-by-side Morning & Evening Color Pills + Edited Indicator */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`font-mono-num rounded-full px-2 py-0.5 text-[10px] font-extrabold ${mSt.badge}`}
+                    >
+                      صباحي {mRow.submitted ? `${mRow.available}/${mRow.required}` : 'انتظار'}
+                    </span>
+                    <span
+                      className={`font-mono-num rounded-full px-2 py-0.5 text-[10px] font-extrabold ${eSt.badge}`}
+                    >
+                      مسائي {eRow.submitted ? `${eRow.available}/${eRow.required}` : 'انتظار'}
+                    </span>
+                    {(mRow.hasEdit || eRow.hasEdit) && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-900">
+                        تعديل
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* LEFT PANE: Active Branch Chat OR Direct Side-by-Side Morning & Evening Columns */}
+      <section
+        className={`flex flex-col bg-[#f0f2f5] lg:overflow-hidden ${
+          showSidebarOnMobile ? 'hidden lg:flex' : 'flex'
+        }`}
+      >
+        {activeBranchRow ? (
+          <>
+            {/* Branch Chat Header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e9edef] bg-[#f0f2f5] px-4 py-3">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => handleAckNotification(n.id)}
-                  className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-bold text-white"
+                  onClick={() => setSelectedChat(null)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#111b21] lg:hidden"
+                  aria-label="العودة لقائمة الفروع"
                 >
-                  تم الاطلاع
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${
+                    getTrafficStyles(activeBranchRow).avatar
+                  }`}
+                >
+                  {activeBranchRow.branch.name.slice(0, 2)}
+                </div>
+                <div>
+                  <h2 className="text-sm font-extrabold text-[#111b21] sm:text-base">
+                    فرع {activeBranchRow.branch.name}
+                  </h2>
+                  <p className="text-[11px] font-bold text-[#54656f]">
+                    {SHIFT_FULL_AR[adminShift]} ·{' '}
+                    {activeBranchRow.submitted
+                      ? `المتاح: ${activeBranchRow.available} من ${activeBranchRow.required}`
+                      : `لم يُرسل بعد (المطلوب ${activeBranchRow.required})`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeBranchRow.unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleMarkBranchMessagesRead(activeBranchRow.branch.id)}
+                    className="flex min-h-[36px] items-center gap-1 whitespace-nowrap rounded-full bg-[#008069] px-3.5 py-1.5 text-xs font-extrabold text-white hover:bg-[#016b58]"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    <span>تم الاطلاع على الكل</span>
+                  </button>
+                )}
+
+                {activeBranchRow.availableRows.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransferModalBranchId(activeBranchRow.branch.id);
+                      setTransferEmp(null);
+                    }}
+                    className="flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-full border border-[#d1d7db] bg-white px-3.5 py-1.5 text-xs font-extrabold text-[#111b21] hover:bg-[#e9edef]"
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5 text-[#008069]" />
+                    <span>نقل موظف</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onOpenBranchPlanner(activeBranchRow.branch.id)}
+                  className="flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-full border border-[#d1d7db] bg-white px-3.5 py-1.5 text-xs font-extrabold text-[#111b21] hover:bg-[#e9edef]"
+                >
+                  <CalendarDays className="h-3.5 w-3.5 text-[#008069]" />
+                  <span>خطة الفرع</span>
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* Emergency Notices from Branches */}
-      {unreadEmergency.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-xs font-extrabold text-rose-700">
-            تغييرات طارئة من الفروع ({unreadEmergency.length})
-          </h2>
-          {unreadEmergency.map((e) => (
-            <div
-              key={e.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50/70 p-3.5"
-            >
-              <div>
-                <div className="text-xs font-bold text-rose-700">
-                  {SHIFT_FULL_AR[e.shift]} — فرع {e.branchName}
-                </div>
-                <div className="text-sm font-extrabold text-slate-900">
-                  {e.employeeName} غائب: {e.reason}
-                </div>
+            {/* Clean Uncluttered WhatsApp Chat Thread */}
+            <div className="wa-chat-bg min-h-[320px] flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-5">
+              <div className="flex justify-center">
+                <span className="rounded-lg bg-white/90 px-3 py-1 text-[11px] font-extrabold text-[#54656f] shadow-xs">
+                  غداً · {fmtDateAr(tomorrowIso)}
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => handleAckEmergency(e.id)}
-                className="rounded-lg bg-rose-700 px-4 py-1.5 text-xs font-bold text-white hover:bg-rose-800"
-              >
-                تم الاطلاع
-              </button>
+
+              {activeChatMessages.length === 0 ? (
+                <div className="mx-auto max-w-md rounded-xl bg-white/95 p-5 text-center text-xs font-semibold text-[#54656f] shadow-xs">
+                  لا توجد رسائل من فرع {activeBranchRow.branch.name} بعد.
+                  <br />
+                  يمكنك كتابة رسالة للفرع من الأسفل.
+                </div>
+              ) : (
+                activeChatMessages.map((msg) => {
+                  const isFromAdmin = msg.sender === 'admin';
+                  const subForMsg =
+                    msg.submissionKey && state.submissions[msg.submissionKey]
+                      ? state.submissions[msg.submissionKey]
+                      : null;
+
+                  const isHighlighted = highlightedMsgId === msg.id;
+
+                  if (isFromAdmin) {
+                    return (
+                      <div
+                        key={msg.id}
+                        ref={(el) => {
+                          msgRefs.current[msg.id] = el;
+                        }}
+                        className="flex justify-start"
+                      >
+                        <div
+                          className={`max-w-[90%] rounded-xl rounded-tl-sm bg-[#d9fdd3] px-4 py-3 text-[#111b21] shadow-xs transition-all sm:max-w-[75%] ${
+                            isHighlighted ? 'ring-3 ring-[#008069]' : ''
+                          }`}
+                        >
+                          <div className="mb-1 text-xs font-extrabold text-[#008069]">
+                            أنت (الأدمن)
+                          </div>
+                          <div className="whitespace-pre-line text-xs font-semibold leading-relaxed sm:text-sm">
+                            {msg.text}
+                          </div>
+                          <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[10px] font-bold text-[#54656f]">
+                            <span className="font-mono-num">{msg.time}</span>
+                            <CheckCheck
+                              className={`h-4 w-4 ${
+                                msg.readByBranch ? 'text-[#53bdeb]' : 'text-[#667781]'
+                              }`}
+                            />
+                            <span
+                              className={
+                                msg.readByBranch ? 'text-[#0284c7]' : 'text-[#667781]'
+                              }
+                            >
+                              {msg.readByBranch ? 'تم الاطلاع' : 'مرسلة'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={msg.id}
+                      ref={(el) => {
+                        msgRefs.current[msg.id] = el;
+                      }}
+                      className="flex justify-end"
+                    >
+                      <div
+                        className={`max-w-[92%] rounded-xl rounded-tr-sm px-4 py-3 text-[#111b21] shadow-xs transition-all sm:max-w-[78%] ${
+                          msg.kind === 'emergency'
+                            ? 'border border-rose-300 bg-[#fff1f2]'
+                            : msg.supersededByMsgId
+                            ? 'border border-[#d1d7db] bg-[#f8fafc] opacity-75'
+                            : msg.isEditedResend
+                            ? 'border-2 border-amber-400 bg-white'
+                            : 'bg-white'
+                        } ${isHighlighted ? 'ring-3 ring-[#008069]' : ''}`}
+                      >
+                        {msg.isEditedResend && (
+                          <div className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-extrabold text-amber-950">
+                            <div>تعديل جديد على التوفر المرسل</div>
+                            {msg.editSummary && (
+                              <div className="mt-0.5 text-[11px] font-bold text-amber-900">
+                                {msg.editSummary}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {msg.supersededByMsgId && (
+                          <div className="mb-1.5 inline-block rounded-full bg-[#e9edef] px-2.5 py-0.5 text-[10px] font-extrabold text-[#54656f]">
+                            نسخة سابقة — تم تعديلها برسالة أحدث
+                          </div>
+                        )}
+
+                        <div className="mb-1 flex items-center justify-between gap-3">
+                          <span className="text-xs font-extrabold text-[#008069]">
+                            فرع {activeBranchRow.branch.name}
+                          </span>
+                          <span className="font-mono-num text-[10px] text-[#667781]">
+                            {msg.time}
+                          </span>
+                        </div>
+
+                        <div className="whitespace-pre-line text-xs font-semibold leading-relaxed sm:text-sm">
+                          {msg.text}
+                        </div>
+
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#e9edef] pt-2">
+                          {!msg.readByAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleMarkBranchMessagesRead(
+                                  activeBranchRow.branch.id,
+                                  msg.id
+                                )
+                              }
+                              className="flex items-center gap-1 rounded-full bg-[#008069] px-4 py-1.5 text-xs font-extrabold text-white hover:bg-[#016b58]"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              <span>تم الاطلاع</span>
+                            </button>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[11px] font-bold text-[#0284c7]">
+                              <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" />
+                              <span>تم الاطلاع</span>
+                            </span>
+                          )}
+
+                          {subForMsg?.compliance && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectCompliance(subForMsg.compliance)}
+                              className="rounded-full border border-[#d1d7db] bg-[#f8fafc] px-3 py-1 text-[11px] font-bold text-[#111b21] hover:bg-[#e9edef]"
+                            >
+                              تفاصيل المطابقة
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* 3 Operational Control Room Sections (عجز / فائض / مستقر) + بانتظار الإرسال */}
-      <div className="space-y-5">
-        <section>
-          <h2 className="mb-2 text-sm font-extrabold text-rose-700">
-            عجز ({deficits.length})
-          </h2>
-          {deficits.length === 0 ? (
-            <p className="text-xs text-slate-400">لا يوجد عجز</p>
-          ) : (
-            <div className="space-y-2">{deficits.map(renderBranchRow)}</div>
-          )}
-        </section>
+            {/* Clean Free-Text Composer */}
+            <div className="border-t border-[#e9edef] bg-[#f0f2f5] p-3">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendAdminReply();
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={adminReplyInput}
+                  onChange={(e) => setAdminReplyInput(e.target.value)}
+                  placeholder={`اكتب رسالة لفرع ${activeBranchRow.branch.name} لو عايز...`}
+                  className="min-h-[44px] flex-1 rounded-full border border-[#d1d7db] bg-white px-4 py-2 text-sm text-[#111b21] outline-none focus:border-[#008069]"
+                />
+                <button
+                  type="submit"
+                  disabled={!adminReplyInput.trim()}
+                  aria-label="إرسال رسالة للفرع"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#008069] text-white hover:bg-[#016b58] disabled:bg-[#aebac1]"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </form>
+            </div>
+          </>
+        ) : (
+          /* DESKTOP DIRECT 2-SHIFT QUICK ACTION BOARD (NO SUMMARY CLUTTER) */
+          <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+            {unreadEmergency.length > 0 && (
+              <div className="space-y-2">
+                {unreadEmergency.map((e) => (
+                  <div
+                    key={e.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-300 bg-rose-50 p-3.5"
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-rose-700">
+                        طارئ · {SHIFT_FULL_AR[e.shift]} — فرع {e.branchName}
+                      </div>
+                      <div className="text-sm font-extrabold text-[#111b21]">
+                        {e.employeeName}: {e.reason}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChat(e.branchId)}
+                        className="rounded-full border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold text-rose-800"
+                      >
+                        فتح المحادثة
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAckEmergency(e.id)}
+                        className="rounded-full bg-rose-700 px-4 py-1.5 text-xs font-extrabold text-white"
+                      >
+                        تم الاطلاع
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-        <section>
-          <h2 className="mb-2 text-sm font-extrabold text-emerald-700">
-            فائض ({surpluses.length})
-          </h2>
-          {surpluses.length === 0 ? (
-            <p className="text-xs text-slate-400">لا يوجد فائض</p>
-          ) : (
-            <div className="space-y-2">{surpluses.map(renderBranchRow)}</div>
-          )}
-        </section>
+            {unreadComplianceNotifs.length > 0 && (
+              <div className="space-y-2">
+                {unreadComplianceNotifs.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${
+                      n.kind === 'compliance_ok'
+                        ? 'border-[#86efac] bg-[#e7fce3]'
+                        : 'border-amber-300 bg-amber-50'
+                    }`}
+                  >
+                    <span className="text-xs font-extrabold text-[#111b21]">{n.text}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChat(n.branchId)}
+                        className="rounded-full border border-[#d1d7db] bg-white px-3 py-1 text-xs font-bold text-[#111b21]"
+                      >
+                        فتح المحادثة
+                      </button>
+                      {n.complianceReport && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectCompliance(n.complianceReport!)}
+                          className="rounded-full border border-[#d1d7db] bg-white px-3 py-1 text-xs font-bold text-[#111b21]"
+                        >
+                          التفاصيل
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleAckNotification(n.id)}
+                        className="rounded-full bg-[#008069] px-3 py-1 text-xs font-extrabold text-white"
+                      >
+                        تم الاطلاع
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-        <section>
-          <h2 className="mb-2 text-sm font-extrabold text-sky-800">
-            مستقر ({stables.length})
-          </h2>
-          {stables.length === 0 ? (
-            <p className="text-xs text-slate-400">لا توجد فروع مستقرة مرسلة بعد</p>
-          ) : (
-            <div className="space-y-2">{stables.map(renderBranchRow)}</div>
-          )}
-        </section>
-
-        {pendings.length > 0 && (
-          <section>
-            <h2 className="mb-2 text-sm font-extrabold text-slate-500">
-              بانتظار إرسال التوفر ({pendings.length})
-            </h2>
-            <div className="space-y-2">{pendings.map(renderBranchRow)}</div>
-          </section>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {renderShiftColumnCard('morning', morningStatuses)}
+              {renderShiftColumnCard('evening', eveningStatuses)}
+            </div>
+          </div>
         )}
-      </div>
+      </section>
 
-      {/* Modal: Branch Tomorrow Available Staff + Transfers + Plan Link */}
-      {inspectRow && (
+      {/* Transfer Modal */}
+      {transferSourceRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={() => {
-            setInspectBranchId(null);
+            setTransferModalBranchId(null);
             setTransferEmp(null);
           }}
         >
           <div
-            className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[#d1d7db] bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {transferEmp ? (
               <div className="space-y-3">
-                <h3 className="text-base font-extrabold text-slate-900">
-                  نقل {transferEmp.empName}
+                <h3 className="text-base font-extrabold text-[#111b21]">
+                  تحويل {transferEmp.empName} إلى فرع...
                 </h3>
-                <p className="text-xs text-slate-500">من فرع: {inspectRow.branch.name}</p>
+                <p className="text-xs text-[#54656f]">
+                  من فرع: {transferSourceRow.branch.name}
+                </p>
 
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-700">
-                    إلى فرع
-                  </label>
-                  <select
-                    value={transferToBranchId}
-                    onChange={(e) => setTransferToBranchId(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold"
-                  >
-                    {otherBranches.map((ob) => (
-                      <option key={ob.branch.id} value={ob.branch.id}>
-                        {ob.branch.name} (
-                        {!ob.submitted
-                          ? 'لم يرسل'
-                          : ob.diff < 0
-                          ? `عجز ${Math.abs(ob.diff)}`
-                          : ob.diff > 0
-                          ? `فائض ${ob.diff}`
-                          : 'مستقر'}
-                        )
-                      </option>
-                    ))}
-                  </select>
+                <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-[#e9edef] bg-[#f8fafc] p-2">
+                  {transferOtherBranches.map((ob) => {
+                    const isDef = ob.submitted && ob.diff < 0;
+                    const isPicked = transferToBranchId === ob.branch.id;
+                    return (
+                      <button
+                        key={ob.branch.id}
+                        type="button"
+                        onClick={() => setTransferToBranchId(ob.branch.id)}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-right text-xs font-extrabold transition-colors ${
+                          isPicked
+                            ? 'bg-[#008069] text-white'
+                            : 'bg-white text-[#111b21] hover:bg-[#f0f2f5]'
+                        }`}
+                      >
+                        <span>فرع {ob.branch.name}</span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] ${
+                            isPicked
+                              ? 'bg-white/20 text-white'
+                              : isDef
+                              ? 'bg-rose-600 text-white'
+                              : ob.submitted && ob.diff > 0
+                              ? 'bg-amber-400 text-amber-950'
+                              : ob.submitted
+                              ? 'bg-[#008069] text-white'
+                              : 'bg-[#f0f2f5] text-[#54656f]'
+                          }`}
+                        >
+                          {!ob.submitted
+                            ? 'انتظار'
+                            : isDef
+                            ? `عجز ${Math.abs(ob.diff)}`
+                            : ob.diff > 0
+                            ? `فائض +${ob.diff}`
+                            : 'مستقر'}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-700">
+                  <label className="mb-1 block text-xs font-bold text-[#3b4a54]">
                     نوع النقل
                   </label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setTransferMode('temporary')}
-                      className={`flex-1 rounded-lg py-2 text-xs font-bold ${
+                      className={`flex-1 rounded-full py-2 text-xs font-extrabold ${
                         transferMode === 'temporary'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-700'
+                          ? 'bg-[#008069] text-white'
+                          : 'bg-[#f0f2f5] text-[#3b4a54]'
                       }`}
                     >
                       مؤقت لهذه الوردية
@@ -1054,10 +1703,10 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setTransferMode('final')}
-                      className={`flex-1 rounded-lg py-2 text-xs font-bold ${
+                      className={`flex-1 rounded-full py-2 text-xs font-extrabold ${
                         transferMode === 'final'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-700'
+                          ? 'bg-[#008069] text-white'
+                          : 'bg-[#f0f2f5] text-[#3b4a54]'
                       }`}
                     >
                       نقل نهائي
@@ -1069,145 +1718,104 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setTransferEmp(null)}
-                    className="flex-1 rounded-lg border border-slate-200 py-2.5 text-xs font-bold text-slate-700"
+                    className="min-h-[42px] flex-1 rounded-full border border-[#d1d7db] py-2 text-xs font-bold text-[#3b4a54]"
                   >
                     رجوع
                   </button>
                   <button
                     type="button"
                     onClick={handleConfirmTransfer}
-                    className="flex-1 rounded-lg bg-slate-900 py-2.5 text-xs font-extrabold text-white"
+                    className="min-h-[42px] flex-1 rounded-full bg-[#008069] py-2 text-xs font-extrabold text-white hover:bg-[#016b58]"
                   >
-                    اعتماد النقل
+                    إرسال قرار النقل
                   </button>
                 </div>
               </div>
             ) : (
               <div>
-                <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="mb-4 flex items-center justify-between border-b border-[#e9edef] pb-3">
                   <div>
-                    <h3 className="text-base font-extrabold text-slate-900">
-                      الموظفون المتاحون غداً — {inspectRow.branch.name}
+                    <h3 className="text-base font-extrabold text-[#111b21]">
+                      اختر موظفاً للنقل — {transferSourceRow.branch.name}
                     </h3>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-[#54656f]">
                       {SHIFT_FULL_AR[adminShift]} · {fmtDateAr(tomorrowIso)}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setInspectBranchId(null)}
-                    className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600"
+                    onClick={() => setTransferModalBranchId(null)}
+                    className="rounded-full border border-[#d1d7db] px-3 py-1 text-xs font-bold text-[#54656f]"
                   >
                     إغلاق
                   </button>
                 </div>
 
-                {inspectRow.compliance && (
-                  <div
-                    className={`mb-4 rounded-xl border p-3 text-xs ${
-                      inspectRow.compliance.status === 'matched'
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                        : 'border-amber-200 bg-amber-50 text-amber-950'
-                    }`}
-                  >
-                    <div className="font-extrabold">
-                      {inspectRow.compliance.status === 'matched'
-                        ? '✓ الإرسال مطابق للخطة الأسبوعية'
-                        : `⚠️ اختلاف عن الخطة الأسبوعية (${inspectRow.compliance.diffs.length})`}
-                    </div>
-                    {inspectRow.compliance.diffs.length > 0 && (
-                      <ul className="mt-1.5 space-y-1">
-                        {inspectRow.compliance.diffs.map((d, idx) => (
-                          <li key={idx}>• {d.summary}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {!inspectRow.submitted ? (
-                  <p className="py-4 text-center text-sm text-slate-400">
-                    لم يرسل مدير الفرع توفر هذه الوردية بعد.
-                  </p>
-                ) : inspectRow.availableRows.length === 0 ? (
-                  <p className="py-4 text-center text-sm text-slate-400">
-                    لا يوجد موظفون متاحون لهذه الوردية.
-                  </p>
-                ) : (
-                  <div className="mb-4 space-y-2">
-                    {inspectRow.availableRows.map((emp) => {
-                      const empRecord = inspectRow.branch.emps.find((e) => e.id === emp.empId);
-                      const isBtw = empRecord?.shift === 'between';
-                      return (
-                        <div
-                          key={emp.empId}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3"
-                        >
-                          <div>
-                            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                              <span>{emp.empName}</span>
-                              {isBtw && (
-                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-900">
-                                  بتوين
-                                </span>
-                              )}
-                            </div>
-                            {emp.note && (
-                              <div className="text-[11px] text-amber-700">{emp.note}</div>
+                <div className="space-y-2">
+                  {transferSourceRow.availableRows.map((emp) => {
+                    const empRecord = transferSourceRow.branch.emps.find(
+                      (e) => e.id === emp.empId
+                    );
+                    const isBtw = empRecord?.shift === 'between';
+                    return (
+                      <div
+                        key={emp.empId}
+                        className="flex items-center justify-between rounded-xl border border-[#e9edef] bg-[#f8fafc] p-3"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 text-sm font-bold text-[#111b21]">
+                            <span>{emp.empName}</span>
+                            {isBtw && (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-900">
+                                بتوين
+                              </span>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTransferEmp(emp);
-                              const preferred = deficits[0]?.branch.id || otherBranches[0]?.branch.id || '';
-                              setTransferToBranchId(preferred);
-                              setTransferMode('temporary');
-                            }}
-                            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800"
-                          >
-                            خيارات النقل
-                          </button>
+                          {emp.note && (
+                            <div className="text-[11px] text-amber-700">{emp.note}</div>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const bId = inspectRow.branch.id;
-                    setInspectBranchId(null);
-                    onOpenBranchPlanner(bId);
-                  }}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
-                >
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  <span>فتح الخطة الأسبوعية للفرع</span>
-                </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTransferEmp(emp);
+                            const preferred =
+                              deficits[0]?.branch.id ||
+                              transferOtherBranches[0]?.branch.id ||
+                              '';
+                            setTransferToBranchId(preferred);
+                            setTransferMode('temporary');
+                          }}
+                          className="rounded-full bg-[#008069] px-3.5 py-1.5 text-xs font-extrabold text-white hover:bg-[#016b58]"
+                        >
+                          تحويل لفرع آخر
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Compliance Comparison Modal (Triggered from Notification Bell or Banner) */}
+      {/* Compliance Comparison Modal */}
       {selectedCompliance && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={onCloseComplianceModal}
         >
           <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#d1d7db] bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="mb-4 flex items-center justify-between border-b border-[#e9edef] pb-3">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">
+                <h3 className="text-base font-extrabold text-[#111b21]">
                   تقرير مطابقة توفر الغد مع الخطة الأسبوعية
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#54656f]">
                   فرع {selectedCompliance.branchName} · {SHIFTS_AR[selectedCompliance.shift]} ·{' '}
                   {fmtDateAr(selectedCompliance.shiftDate)}
                 </p>
@@ -1215,7 +1823,7 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
               <button
                 type="button"
                 onClick={onCloseComplianceModal}
-                className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-bold"
+                className="rounded-full border border-[#d1d7db] px-3 py-1 text-xs font-bold"
               >
                 إغلاق
               </button>
@@ -1224,24 +1832,14 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
             <div
               className={`mb-4 rounded-xl border p-4 ${
                 selectedCompliance.status === 'matched'
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                  ? 'border-[#86efac] bg-[#e7fce3] text-[#006e5a]'
                   : 'border-amber-300 bg-amber-50 text-amber-950'
               }`}
             >
-              <div className="flex items-center gap-2 text-sm font-extrabold">
-                {selectedCompliance.status === 'matched' ? (
-                  <>
-                    <CheckCircle2 className="h-5 w-5 text-emerald-700" />
-                    <span>الإرسال مطابق تماماً للخطة الأسبوعية</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="h-5 w-5 text-amber-700" />
-                    <span>
-                      رصد {selectedCompliance.diffs.length} اختلاف عن الخطة الأسبوعية
-                    </span>
-                  </>
-                )}
+              <div className="text-sm font-extrabold">
+                {selectedCompliance.status === 'matched'
+                  ? 'الإرسال مطابق تماماً للخطة الأسبوعية'
+                  : `رصد ${selectedCompliance.diffs.length} اختلاف عن الخطة الأسبوعية`}
               </div>
               <div className="mt-2 flex gap-6 text-xs font-bold">
                 <span>المجدولون بالخطة: {selectedCompliance.plannedCount}</span>
@@ -1250,20 +1848,20 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
             </div>
 
             {selectedCompliance.diffs.length > 0 && (
-              <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="overflow-hidden rounded-xl border border-[#e9edef]">
                 <table className="w-full border-collapse text-right text-xs">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-600">
+                    <tr className="border-b border-[#e9edef] bg-[#f0f2f5] font-bold text-[#54656f]">
                       <th className="px-3 py-2">الموظف</th>
                       <th className="px-3 py-2">الخطة الأسبوعية</th>
                       <th className="px-3 py-2">الإرسال الفعلي</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-[#e9edef]">
                     {selectedCompliance.diffs.map((df, idx) => (
                       <tr key={idx}>
-                        <td className="px-3 py-2 font-bold text-slate-900">{df.empName}</td>
-                        <td className="px-3 py-2 text-slate-600">{df.expected}</td>
+                        <td className="px-3 py-2 font-bold text-[#111b21]">{df.empName}</td>
+                        <td className="px-3 py-2 text-[#54656f]">{df.expected}</td>
                         <td className="px-3 py-2 font-bold text-rose-700">{df.actual}</td>
                       </tr>
                     ))}
@@ -1280,9 +1878,9 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
                   onCloseComplianceModal();
                   onOpenBranchPlanner(bId);
                 }}
-                className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900"
+                className="flex items-center gap-1.5 rounded-full border border-[#d1d7db] bg-white px-4 py-2 text-xs font-bold text-[#111b21]"
               >
-                <CalendarDays className="h-3.5 w-3.5" />
+                <CalendarDays className="h-3.5 w-3.5 text-[#008069]" />
                 <span>فتح خطة الفرع</span>
               </button>
               <button
@@ -1290,12 +1888,12 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
                 onClick={() => {
                   const bId = selectedCompliance.branchId;
                   onCloseComplianceModal();
-                  setInspectBranchId(bId);
+                  setSelectedChat(bId);
                 }}
-                className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white"
+                className="flex items-center gap-1.5 rounded-full bg-[#008069] px-4 py-2 text-xs font-extrabold text-white"
               >
                 <Users className="h-3.5 w-3.5" />
-                <span>المتاحون والنقل</span>
+                <span>فتح محادثة الفرع</span>
               </button>
             </div>
           </div>

@@ -1,8 +1,11 @@
 export type ShiftType = 'morning' | 'evening' | 'between';
 
+export type BranchThemeMode = 'dark' | 'light';
+
 export interface MonthlyLeave {
   id: string;
-  startDate: string; // YYYY-MM-DD
+  recurringDayOfMonth?: number; // 1-31: repeats every month on this day
+  startDate: string; // YYYY-MM-DD (used for fallback / reference)
   daysCount: number;
   skipWeeklyInSameWeek: boolean;
   note?: string;
@@ -87,6 +90,9 @@ export interface AvailabilitySubmission {
   submittedAt: string;
   rows: AvailabilityRow[];
   compliance: ComplianceReport;
+  hasEdit?: boolean;
+  lastEditAt?: string;
+  lastEditSummary?: string;
 }
 
 export interface EmergencyNotice {
@@ -115,7 +121,7 @@ export interface TransferNotice {
 
 export interface NotificationItem {
   id: string;
-  kind: 'compliance_ok' | 'compliance_diff' | 'emergency' | 'transfer';
+  kind: 'compliance_ok' | 'compliance_diff' | 'emergency' | 'transfer' | 'message';
   senderRole: 'branch' | 'central';
   senderName: string;
   recipientRole: 'branch' | 'central';
@@ -126,7 +132,36 @@ export interface NotificationItem {
   text: string;
   time: string;
   read: boolean;
+  messageId?: string;
+  isEdit?: boolean;
   complianceReport?: ComplianceReport;
+}
+
+export interface ChatMessage {
+  id: string;
+  branchId: string;
+  sender: 'branch' | 'admin' | 'system';
+  kind: 'text' | 'availability' | 'emergency' | 'transfer';
+  text: string;
+  shift?: ShiftType;
+  shiftDate?: string;
+  submissionKey?: string;
+  isEditedResend?: boolean;
+  editSummary?: string;
+  supersededByMsgId?: string;
+  replyTo?: {
+    id: string;
+    senderLabel: string;
+    snippet: string;
+  };
+  reaction?: string;
+  audioNote?: {
+    durationSeconds: number;
+    audioUrl?: string;
+  };
+  time: string;
+  readByAdmin: boolean;
+  readByBranch: boolean;
 }
 
 export interface AuditItem {
@@ -145,6 +180,7 @@ export interface AppState {
   emergencyNotices: EmergencyNotice[];
   transferNotices: TransferNotice[];
   notifications: NotificationItem[];
+  messages: ChatMessage[];
   audit: AuditItem[];
 }
 
@@ -154,6 +190,6 @@ export interface SessionState {
   workspace: 'availability' | 'planner';
   branchScreen: 'home' | 'submit' | 'settings';
   activeShift: ShiftType;
-  adminScreen: 'control' | 'settings' | 'history';
+  adminScreen: 'control' | 'settings';
   adminShift: ShiftType;
 }

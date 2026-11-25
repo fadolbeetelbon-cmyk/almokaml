@@ -2,9 +2,11 @@ import {
   AppState,
   AvailabilityRow,
   Branch,
+  ChatMessage,
   ComplianceDiffItem,
   ComplianceReport,
   Employee,
+  MonthlyLeave,
   PlannedEmployeeDay,
   ShiftScheduleConfig,
   ShiftType,
@@ -64,6 +66,20 @@ export const UNAVAILABLE_REASONS = [
   'غياب بدون إذن',
 ] as const;
 
+export const BRANCH_QUICK_REPLIES = [
+  'تمام، وصلت',
+  'محتاجين فرد زيادة',
+  'طاقم الوردية جاهز',
+  'كلمني لو سمحت',
+] as const;
+
+export const ADMIN_QUICK_REPLIES = [
+  'تم الاستلام، شكراً',
+  'تمام، معتمد',
+  'جاري توفير فرد دعم',
+  'تواصل معي للضرورة',
+] as const;
+
 export const DEFAULT_SHIFT_SCHEDULES: Record<ShiftType, ShiftScheduleConfig> = {
   morning: { label: 'الوردية الصباحية', tin: '07:00', tout: '17:00' },
   between: { label: 'بتوين', tin: '10:00', tout: '23:00' },
@@ -71,7 +87,10 @@ export const DEFAULT_SHIFT_SCHEDULES: Record<ShiftType, ShiftScheduleConfig> = {
 };
 
 export const ADMIN_PIN = '0000';
-export const STORE_KEY = 'roast_shift_unified_v5';
+export const STORE_KEY = 'roast_shift_whatsapp_v1';
+export const BRANCH_THEME_KEY = 'roast_shift_branch_theme_v1';
+export const BRANCH_SESSION_KEY = 'roast_shift_branch_session_v1';
+export const BRANCH_LARGE_FONT_KEY = 'roast_shift_large_font_v1';
 
 export const BRANCH_NAMES = [
   'الصنادلي',
@@ -209,14 +228,50 @@ export function getRollingWeekQueue(todayIso: string): {
   });
 }
 
+export function formatAvailabilityChatText(
+  branchName: string,
+  shift: ShiftType,
+  shiftDate: string,
+  rows: AvailabilityRow[],
+  _compliance: ComplianceReport,
+  branchEmps: Employee[]
+): string {
+  const avail = rows.filter((r) => !r.movedOut && r.status === 'available');
+  const unavail = rows.filter((r) => !r.movedOut && r.status === 'unavailable');
+  const empMap = new Map(branchEmps.map((e) => [e.id, e]));
+
+  const availLines = avail.map((r) => {
+    const emp = empMap.get(r.empId);
+    const isBtw = emp?.shift === 'between';
+    const btwLabel = isBtw
+      ? ` (بتوين · ${shift === 'morning' ? 'من 10:00 ص' : 'حتى 11:00 م'})`
+      : '';
+    return `• ${r.empName}${btwLabel}`;
+  });
+
+  const unavailLines = unavail.map(
+    (r) => `• ${r.empName}${r.reason ? ` — ${r.reason}` : ''}`
+  );
+
+  const lines: string[] = [
+    `توفر ${SHIFT_FULL_AR[shift]} — فرع ${branchName}`,
+    `غداً: ${fmtDateAr(shiftDate)}`,
+    '',
+    `الحضور (${avail.length}):`,
+    ...(availLines.length > 0 ? availLines : ['• لا يوجد']),
+  ];
+
+  if (unavailLines.length > 0) {
+    lines.push('', `غير المتاحين (${unavail.length}):`, ...unavailLines);
+  }
+
+  return lines.join('\n');
+}
+
 export function createSeedState(): AppState {
   const firstNames = ['أحمد', 'محمد', 'يوسف', 'كريم', 'عمر', 'مصطفى', 'طارق', 'خالد'];
   const lastNames = ['علي', 'سعيد', 'حسن', 'عادل', 'ناصر', 'سالم', 'إبراهيم', 'فتحي'];
 
-  // Balanced realistic roster per branch:
-  // Morning: 4 employees (3 planned available most days, 1 rotating weekly off)
-  // Evening: 4 employees
-  // Between: 1 employee
   const templateRoster: Array<{
     shift: ShiftType;
     weeklyOffDay: number | null;
@@ -250,7 +305,6 @@ export function createSeedState(): AppState {
       };
     });
 
-    // Vary required headcounts slightly so Admin control room naturally shows deficit/surplus/stable examples once branches submit
     return {
       id: `b${bIdx + 1}`,
       name,
@@ -269,8 +323,6 @@ export function createSeedState(): AppState {
     };
   });
 
-  // Pre-seed two neighboring branches' morning submissions for tomorrow so Admin Control Room feels alive (surplus/deficit),
-  // while Branch 1 (الصنادلي) remains unsubmitted for the manager / guided tour to test live.
   const seedBase: AppState = {
     adminPin: ADMIN_PIN,
     branches,
@@ -279,11 +331,13 @@ export function createSeedState(): AppState {
     emergencyNotices: [],
     transferNotices: [],
     notifications: [],
+    messages: [],
     audit: [],
   };
 
-  // Pre-seed Branch 3 (مراد - surplus 4/2) and Branch 2 (ميدان لبنان - deficit 2/4) for tomorrow morning
-  ['b2', 'b3'].forEach((bId) => {
+  // Pre-seed Branch 2 (ميدان لبنان - deficit) & Branch 3 (مراد - surplus) tomorrow morning chats
+  ['b2', 'b3'].forEach((bId, idxSeed) => {
+    const branch = seedBase.branches.find((b) => b.id === bId)!;
     const plan = computeDayPlanForBranch(seedBase, bId, tomorrowIso);
     const shiftEmps = plan.filter(
       (p) =>
@@ -311,18 +365,56 @@ export function createSeedState(): AppState {
     });
     const compliance = evaluateAvailabilityCompliance(seedBase, bId, 'morning', tomorrowIso, rows);
     const key = submissionKey(bId, 'morning', tomorrowIso);
+    const timeStr = idxSeed === 0 ? '08:15 م' : '08:22 م';
     seedBase.submissions[key] = {
       key,
       branchId: bId,
       shift: 'morning',
       shiftDate: tomorrowIso,
-      submittedAt: '08:15 م',
+      submittedAt: timeStr,
       rows,
       compliance,
     };
+
+    const chatMsg: ChatMessage = {
+      id: `msg_seed_${bId}_m`,
+      branchId: bId,
+      sender: 'branch',
+      kind: 'availability',
+      text: formatAvailabilityChatText(
+        branch.name,
+        'morning',
+        tomorrowIso,
+        rows,
+        compliance,
+        branch.emps
+      ),
+      shift: 'morning',
+      shiftDate: tomorrowIso,
+      submissionKey: key,
+      time: timeStr,
+      readByAdmin: false,
+      readByBranch: true,
+    };
+    seedBase.messages.push(chatMsg);
   });
 
   return seedBase;
+}
+
+function sanitizeLegacyText(txt: string): string {
+  if (!txt) return txt;
+  return txt
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F]/gu, '')
+    .replace(/المدير المركزي/g, 'الأدمن')
+    .replace(/الأدمن المركزي/g, 'الأدمن')
+    .replace(/الإدارة المركزية/g, 'الأدمن')
+    .replace(/مديري الفروع/g, 'الفروع')
+    .replace(/مدير فرع\s+/g, 'فرع ')
+    .replace(/مدير الفرع/g, 'الفرع')
+    .replace(/كبار السن/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^\s+|\s+$/gm, '');
 }
 
 export function loadState(): AppState {
@@ -339,6 +431,40 @@ export function loadState(): AppState {
           (b) => b && b.id && b.pin && Array.isArray(b.emps) && b.shiftSchedules && b.requiredByShift
         )
       ) {
+        const cleanMessages = Array.isArray(parsed.messages)
+          ? parsed.messages.map((m) => ({
+              ...m,
+              text: sanitizeLegacyText(m.text),
+              editSummary: m.editSummary ? sanitizeLegacyText(m.editSummary) : m.editSummary,
+            }))
+          : [];
+        const cleanNotifications = Array.isArray(parsed.notifications)
+          ? parsed.notifications.map((n) => ({
+              ...n,
+              senderName: sanitizeLegacyText(n.senderName),
+              text: sanitizeLegacyText(n.text),
+            }))
+          : [];
+        const cleanTransfers = Array.isArray(parsed.transferNotices)
+          ? parsed.transferNotices.map((t) => ({
+              ...t,
+              text: sanitizeLegacyText(t.text),
+              typeLabel: sanitizeLegacyText(t.typeLabel),
+            }))
+          : [];
+        const cleanEmergencies = Array.isArray(parsed.emergencyNotices)
+          ? parsed.emergencyNotices.map((e) => ({
+              ...e,
+              reason: sanitizeLegacyText(e.reason),
+            }))
+          : [];
+        const cleanAudit = Array.isArray(parsed.audit)
+          ? parsed.audit.map((a) => ({
+              ...a,
+              text: sanitizeLegacyText(a.text),
+            }))
+          : [];
+
         return {
           adminPin:
             typeof parsed.adminPin === 'string' && parsed.adminPin.trim()
@@ -353,10 +479,11 @@ export function loadState(): AppState {
             parsed.submissions && typeof parsed.submissions === 'object'
               ? parsed.submissions
               : {},
-          emergencyNotices: Array.isArray(parsed.emergencyNotices) ? parsed.emergencyNotices : [],
-          transferNotices: Array.isArray(parsed.transferNotices) ? parsed.transferNotices : [],
-          notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
-          audit: Array.isArray(parsed.audit) ? parsed.audit : [],
+          emergencyNotices: cleanEmergencies,
+          transferNotices: cleanTransfers,
+          notifications: cleanNotifications,
+          messages: cleanMessages,
+          audit: cleanAudit,
         };
       }
     }
@@ -374,6 +501,29 @@ export function saveState(state: AppState): void {
   }
 }
 
+export function doesMonthlyLeaveCoverIso(ml: MonthlyLeave, isoDate: string): boolean {
+  const count = Math.max(1, ml.daysCount);
+  if (ml.recurringDayOfMonth && ml.recurringDayOfMonth >= 1) {
+    const { year, month0 } = parseIsoParts(isoDate);
+    const maxCur = new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate();
+    const startDayCur = Math.min(ml.recurringDayOfMonth, maxCur);
+    const startIsoCur = `${year}-${pad2(month0 + 1)}-${pad2(startDayCur)}`;
+    const endIsoCur = addDaysIso(startIsoCur, count - 1);
+    if (isoDate >= startIsoCur && isoDate <= endIsoCur) return true;
+
+    const prevDt = new Date(Date.UTC(year, month0, 0));
+    const prevYear = prevDt.getUTCFullYear();
+    const prevMonth0 = prevDt.getUTCMonth();
+    const maxPrev = prevDt.getUTCDate();
+    const startDayPrev = Math.min(ml.recurringDayOfMonth, maxPrev);
+    const startIsoPrev = `${prevYear}-${pad2(prevMonth0 + 1)}-${pad2(startDayPrev)}`;
+    const endIsoPrev = addDaysIso(startIsoPrev, count - 1);
+    return isoDate >= startIsoPrev && isoDate <= endIsoPrev;
+  }
+  const endIso = addDaysIso(ml.startDate, count - 1);
+  return isoDate >= ml.startDate && isoDate <= endIso;
+}
+
 export function computeDayPlanForBranch(
   state: AppState,
   branchId: string,
@@ -385,24 +535,20 @@ export function computeDayPlanForBranch(
   const { year, month0, day } = parseIsoParts(isoDate);
   const dow = new Date(Date.UTC(year, month0, day)).getUTCDay();
   const overrides = state.dailyOverrides[overrideKey(branchId, isoDate)] || {};
-  const weekIsoSet = new Set(getSatToFriWeek(isoDate).map((d) => d.iso));
+  const weekIsoList = getSatToFriWeek(isoDate).map((d) => d.iso);
 
   return branch.emps
     .filter((e) => !e.suspended)
     .map((emp) => {
       const ov = overrides[emp.id];
 
-      const activeMonthly = (emp.monthlyLeaves || []).find((ml) => {
-        const endIso = addDaysIso(ml.startDate, Math.max(0, ml.daysCount - 1));
-        return isoDate >= ml.startDate && isoDate <= endIso;
-      });
+      const activeMonthly = (emp.monthlyLeaves || []).find((ml) =>
+        doesMonthlyLeaveCoverIso(ml, isoDate)
+      );
 
       const suppressWeekly = (emp.monthlyLeaves || []).some((ml) => {
         if (!ml.skipWeeklyInSameWeek) return false;
-        for (let i = 0; i < ml.daysCount; i++) {
-          if (weekIsoSet.has(addDaysIso(ml.startDate, i))) return true;
-        }
-        return false;
+        return weekIsoList.some((wIso) => doesMonthlyLeaveCoverIso(ml, wIso));
       });
 
       const isWeeklyOff =
@@ -484,7 +630,7 @@ export function buildPlannedRowsForShift(
 
 /**
  * Compares what the Branch Manager submitted for tomorrow's shift against
- * the branch's Weekly Shift Plan (oast-shift) for tomorrow's date.
+ * the branch's Weekly Shift Plan for tomorrow's date.
  */
 export function evaluateAvailabilityCompliance(
   state: AppState,

@@ -1,26 +1,26 @@
 import React, { useMemo, useState } from 'react';
 import {
+  ArrowRight,
   CalendarDays,
-  Check,
+  Clock,
   Edit3,
   Moon,
   Plus,
-  RotateCcw,
   Search,
-  Settings,
+  Send,
   Sun,
   Trash2,
   Users,
+  X,
 } from 'lucide-react';
 import {
   computeDayPlanForBranch,
-  createSeedState,
   DAY_NAMES_AR,
   formatTime12,
   getCairoToday,
   getRollingWeekQueue,
+  pad2,
   SHIFTS_AR,
-  WEEK_ORDER_SAT_FRI,
 } from '../data/seed';
 import {
   AppState,
@@ -29,9 +29,9 @@ import {
   MonthlyLeave,
   ShiftType,
 } from '../types';
-import { DateDialModal } from './DateDialModal';
+import { MonthlyLeaveDialModal, WeeklyOffDialModal } from './DateDialModal';
 
-export type PlannerTab = 'today' | 'team' | 'branch';
+export type PlannerTab = 'hub' | 'today' | 'team';
 
 interface PlannerModuleProps {
   state: AppState;
@@ -42,6 +42,8 @@ interface PlannerModuleProps {
   onUpdateState: (updater: (prev: AppState) => AppState) => void;
   onNotify: (msg: string) => void;
   onGoToAvailability?: (shift: ShiftType) => void;
+  onBackToAdminChats?: () => void;
+  onBackToBranchChats?: () => void;
 }
 
 export const PlannerModule: React.FC<PlannerModuleProps> = ({
@@ -53,44 +55,42 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
   onUpdateState,
   onNotify,
   onGoToAvailability,
+  onBackToAdminChats,
+  onBackToBranchChats,
 }) => {
   const cairoToday = useMemo(() => getCairoToday(), []);
   const weekQueue = useMemo(() => getRollingWeekQueue(cairoToday.iso), [cairoToday.iso]);
 
-  const [tab, setTab] = useState<PlannerTab>('today');
+  const [tab, setTab] = useState<PlannerTab>(isAdmin ? 'today' : 'today');
   const [selectedIso, setSelectedIso] = useState<string>(cairoToday.iso);
   const [editModalShift, setEditModalShift] = useState<'morning' | 'evening' | null>(null);
 
   React.useEffect(() => {
     if (externalTab) {
-      setTab(externalTab.tab);
+      setTab(isAdmin ? 'today' : externalTab.tab);
     }
-  }, [externalTab?.nonce, externalTab?.tab]);
+  }, [externalTab?.nonce, externalTab?.tab, isAdmin]);
 
-  // Team settings state
   const [teamSearch, setTeamSearch] = useState('');
   const [newEmpName, setNewEmpName] = useState('');
   const [newEmpShift, setNewEmpShift] = useState<ShiftType>('morning');
-  const [newEmpOffDay, setNewEmpOffDay] = useState<string>('5');
+  const [newEmpOffDay, setNewEmpOffDay] = useState<number | null>(5);
+  const [newEmpMonthlyDraft, setNewEmpMonthlyDraft] = useState<{
+    dayOfMonth: number;
+    daysCount: number;
+    skipWeeklyInSameWeek: boolean;
+  } | null>(null);
 
-  // Monthly leave modal
-  const [leaveEmpId, setLeaveEmpId] = useState<string | null>(null);
-  const [leaveStartIso, setLeaveStartIso] = useState<string>(cairoToday.iso);
-  const [leaveDaysCount, setLeaveDaysCount] = useState<number>(3);
-  const [leaveSkipWeekly, setLeaveSkipWeekly] = useState<boolean>(true);
-  const [leaveNote, setLeaveNote] = useState<string>('');
-  const [dialOpen, setDialOpen] = useState(false);
+  const [weeklyDialTarget, setWeeklyDialTarget] = useState<
+    { mode: 'new' } | { mode: 'emp'; empId: string } | null
+  >(null);
+  const [monthlyDialTarget, setMonthlyDialTarget] = useState<
+    { mode: 'new' } | { mode: 'emp'; empId: string } | null
+  >(null);
+  const [leaveListEmpId, setLeaveListEmpId] = useState<string | null>(null);
 
   const branch: Branch =
     state.branches.find((b) => b.id === branchId) || state.branches[0];
-
-  const [branchNameDraft, setBranchNameDraft] = useState(branch.name);
-  const [schedulesDraft, setSchedulesDraft] = useState(branch.shiftSchedules);
-
-  React.useEffect(() => {
-    setBranchNameDraft(branch.name);
-    setSchedulesDraft(branch.shiftSchedules);
-  }, [branch.id, branch.name, branch.shiftSchedules]);
 
   const activeDayObj = useMemo(() => {
     return weekQueue.find((d) => d.iso === selectedIso) || weekQueue[0];
@@ -101,7 +101,6 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
     [state, branch.id, activeDayObj.iso]
   );
 
-  // Split day plan into the 2 main horizontal shift cards (Morning & Evening) with Between embedded in both
   const dayGroups = useMemo(() => {
     const morningAvail = activeDayPlan.filter((p) => p.plannedShift === 'morning');
     const eveningAvail = activeDayPlan.filter((p) => p.plannedShift === 'evening');
@@ -126,6 +125,227 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
     };
   }, [activeDayPlan]);
 
+  const morningCfg = branch.shiftSchedules.morning;
+  const eveningCfg = branch.shiftSchedules.evening;
+  const betweenCfg = branch.shiftSchedules.between;
+
+  const formatLeaveSummary = (ml: MonthlyLeave) => {
+    const dLabel = ml.daysCount === 1 ? 'يوم' : ml.daysCount === 2 ? 'يومان' : `${ml.daysCount} أيام`;
+    if (ml.recurringDayOfMonth) {
+      return `يوم ${ml.recurringDayOfMonth} من كل شهر (${dLabel})`;
+    }
+    return `${ml.startDate} (${dLabel})`;
+  };
+
+  // =========================================================================
+  // ADMIN READ-ONLY MODE (Kept intact in light mode)
+  // =========================================================================
+  if (isAdmin) {
+    return (
+      <div className="mx-auto max-w-5xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#d1d7db] bg-white p-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            {onBackToAdminChats && (
+              <button
+                type="button"
+                onClick={onBackToAdminChats}
+                className="flex min-h-[38px] items-center gap-1.5 rounded-full border border-[#d1d7db] bg-[#f0f2f5] px-4 py-1.5 text-xs font-extrabold text-[#111b21] hover:bg-[#e9edef]"
+              >
+                <ArrowRight className="h-4 w-4 text-[#008069]" />
+                <span>عودة للمحادثات</span>
+              </button>
+            )}
+            <div>
+              <div className="text-xs font-extrabold text-[#008069]">
+                مراجعة خطة الفرع (للقراءة فقط)
+              </div>
+              <h2 className="mt-0.5 text-base font-extrabold text-[#111b21] sm:text-lg">
+                فرع {branch.name} — {activeDayObj.arName} ({activeDayObj.shortDate})
+              </h2>
+            </div>
+          </div>
+
+          <select
+            value={branch.id}
+            onChange={(e) => onSelectBranch(e.target.value)}
+            className="min-h-[42px] rounded-full border border-[#d1d7db] bg-[#f0f2f5] px-4 py-2 text-sm font-extrabold text-[#111b21] outline-none focus:border-[#008069]"
+          >
+            {state.branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                فرع {b.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="rounded-2xl border border-[#d1d7db] bg-white p-2.5 shadow-xs sm:p-3">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 sm:grid sm:grid-cols-7 sm:pb-0">
+            {weekQueue.map((wd) => {
+              const isSel = wd.iso === activeDayObj.iso;
+              const isToday = wd.offsetFromToday === 0;
+              const isTomorrow = wd.offsetFromToday === 1;
+              return (
+                <button
+                  key={wd.dayOfWeek}
+                  type="button"
+                  onClick={() => setSelectedIso(wd.iso)}
+                  className={`min-w-[82px] shrink-0 rounded-xl border px-2.5 py-2 text-right transition-colors sm:min-w-0 ${
+                    isSel
+                      ? 'border-[#008069] bg-[#008069] text-white'
+                      : 'border-[#e9edef] bg-[#f8fafc] text-[#111b21] hover:bg-[#f0f2f5]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 text-[11px] font-extrabold sm:text-xs">
+                    <span>{wd.arName}</span>
+                    {isToday && (
+                      <span
+                        className={`rounded px-1 py-0.5 text-[9px] sm:text-[10px] ${
+                          isSel ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        اليوم
+                      </span>
+                    )}
+                    {isTomorrow && (
+                      <span
+                        className={`rounded px-1 py-0.5 text-[9px] sm:text-[10px] ${
+                          isSel ? 'bg-[#25d366] text-[#111b21]' : 'bg-[#e7fce3] text-[#008069]'
+                        }`}
+                      >
+                        غداً
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className={`font-mono-num mt-0.5 text-[10px] font-bold sm:text-[11px] ${
+                      isSel ? 'text-white/85' : 'text-[#54656f]'
+                    }`}
+                  >
+                    {wd.shortDate}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 text-center text-[11px] font-bold text-[#54656f]">
+            الأيام والتواريخ تتغير أوتوماتيك كل يوم حسب التقويم
+          </div>
+        </div>
+
+        <div id="plannerDaySummary" className="grid grid-cols-2 gap-2 sm:gap-4">
+          <div className="min-w-0 rounded-2xl border border-[#d1d7db] bg-white p-2.5 shadow-xs sm:p-5">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1.5 border-b border-[#e9edef] pb-2 sm:mb-3 sm:pb-3">
+              <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 sm:h-9 sm:w-9">
+                  <Sun className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="truncate text-xs font-extrabold text-[#111b21] sm:text-base">
+                    صباحي
+                  </h3>
+                  <div className="font-mono-num truncate text-[10px] text-[#54656f] sm:text-xs">
+                    {formatTime12(morningCfg.tin)} — {formatTime12(morningCfg.tout)}
+                  </div>
+                </div>
+              </div>
+              <span className="rounded-full bg-[#e7fce3] px-2 py-0.5 text-[10px] font-extrabold text-[#006e5a] sm:px-3 sm:py-1 sm:text-xs">
+                {dayGroups.morningAvail.length + dayGroups.betweenAvail.length} متاح
+              </span>
+            </div>
+
+            <div className="space-y-1.5 sm:space-y-2">
+              {dayGroups.morningAvail.map((p) => (
+                <div
+                  key={p.emp.id}
+                  className="flex items-center justify-between gap-1 rounded-xl border border-[#e9edef] bg-[#f8fafc] px-2 py-2 text-xs font-bold text-[#111b21] sm:px-3.5 sm:py-2.5 sm:text-sm"
+                >
+                  <span className="truncate">{p.emp.name}</span>
+                  <span className="shrink-0 text-[10px] text-[#008069] sm:text-xs">حضور</span>
+                </div>
+              ))}
+              {dayGroups.betweenAvail.map((p) => (
+                <div
+                  key={`${p.emp.id}_rm`}
+                  className="flex items-center justify-between gap-1 rounded-xl border border-amber-200 bg-amber-50/50 px-2 py-2 text-xs font-bold text-[#111b21] sm:px-3.5 sm:py-2.5 sm:text-sm"
+                >
+                  <span className="truncate">{p.emp.name}</span>
+                  <span className="shrink-0 text-[10px] text-amber-800 sm:text-xs">
+                    بتوين {formatTime12(betweenCfg.tin)}
+                  </span>
+                </div>
+              ))}
+              {dayGroups.morningOff.map((p) => (
+                <div
+                  key={`${p.emp.id}_om`}
+                  className="flex items-center justify-between gap-1 rounded-xl border border-rose-200 bg-rose-50/70 px-2 py-1.5 text-[11px] font-bold text-rose-900 sm:px-3.5 sm:py-2 sm:text-xs"
+                >
+                  <span className="truncate">{p.emp.name}</span>
+                  <span className="shrink-0 text-[10px]">{p.reason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="min-w-0 rounded-2xl border border-[#d1d7db] bg-white p-2.5 shadow-xs sm:p-5">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1.5 border-b border-[#e9edef] pb-2 sm:mb-3 sm:pb-3">
+              <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#008069] text-white sm:h-9 sm:w-9">
+                  <Moon className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="truncate text-xs font-extrabold text-[#111b21] sm:text-base">
+                    مسائي
+                  </h3>
+                  <div className="font-mono-num truncate text-[10px] text-[#54656f] sm:text-xs">
+                    {formatTime12(eveningCfg.tin)} — {formatTime12(eveningCfg.tout)}
+                  </div>
+                </div>
+              </div>
+              <span className="rounded-full bg-[#e7fce3] px-2 py-0.5 text-[10px] font-extrabold text-[#006e5a] sm:px-3 sm:py-1 sm:text-xs">
+                {dayGroups.eveningAvail.length + dayGroups.betweenAvail.length} متاح
+              </span>
+            </div>
+
+            <div className="space-y-1.5 sm:space-y-2">
+              {dayGroups.eveningAvail.map((p) => (
+                <div
+                  key={p.emp.id}
+                  className="flex items-center justify-between gap-1 rounded-xl border border-[#e9edef] bg-[#f8fafc] px-2 py-2 text-xs font-bold text-[#111b21] sm:px-3.5 sm:py-2.5 sm:text-sm"
+                >
+                  <span className="truncate">{p.emp.name}</span>
+                  <span className="shrink-0 text-[10px] text-[#008069] sm:text-xs">حضور</span>
+                </div>
+              ))}
+              {dayGroups.betweenAvail.map((p) => (
+                <div
+                  key={`${p.emp.id}_re`}
+                  className="flex items-center justify-between gap-1 rounded-xl border border-amber-200 bg-amber-50/50 px-2 py-2 text-xs font-bold text-[#111b21] sm:px-3.5 sm:py-2.5 sm:text-sm"
+                >
+                  <span className="truncate">{p.emp.name}</span>
+                  <span className="shrink-0 text-[10px] text-amber-800 sm:text-xs">
+                    بتوين حتى {formatTime12(betweenCfg.tout)}
+                  </span>
+                </div>
+              ))}
+              {dayGroups.eveningOff.map((p) => (
+                <div
+                  key={`${p.emp.id}_oe`}
+                  className="flex items-center justify-between gap-1 rounded-xl border border-rose-200 bg-rose-50/70 px-2 py-1.5 text-[11px] font-bold text-rose-900 sm:px-3.5 sm:py-2 sm:text-xs"
+                >
+                  <span className="truncate">{p.emp.name}</span>
+                  <span className="shrink-0 text-[10px]">{p.reason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // BRANCH MANAGER PLANNER HELPERS (WhatsApp Dark Mode + Light Toggle)
+  // =========================================================================
   const setDailyOverride = (
     empId: string,
     patch: { shift?: ShiftType | 'off' } | null
@@ -164,16 +384,31 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
       onNotify('يرجى كتابة اسم الموظف');
       return;
     }
+
+    const monthlyLeaves: MonthlyLeave[] = [];
+    if (newEmpMonthlyDraft) {
+      const refMonth = pad2(cairoToday.month + 1);
+      const refDay = pad2(newEmpMonthlyDraft.dayOfMonth);
+      monthlyLeaves.push({
+        id: `ml_${Date.now()}`,
+        recurringDayOfMonth: newEmpMonthlyDraft.dayOfMonth,
+        startDate: `${cairoToday.year}-${refMonth}-${refDay}`,
+        daysCount: newEmpMonthlyDraft.daysCount,
+        skipWeeklyInSameWeek: newEmpMonthlyDraft.skipWeeklyInSameWeek,
+      });
+    }
+
     const newEmp: Employee = {
       id: `e_${branch.id}_${Date.now()}`,
       name,
       shift: newEmpShift,
       suspended: false,
-      weeklyOffDay: newEmpOffDay === '' ? null : Number(newEmpOffDay),
+      weeklyOffDay: newEmpOffDay,
       extraOffDay1: null,
       extraOffDay2: null,
-      monthlyLeaves: [],
+      monthlyLeaves,
     };
+
     onUpdateState((prev) => ({
       ...prev,
       branches: prev.branches.map((b) =>
@@ -181,6 +416,7 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
       ),
     }));
     setNewEmpName('');
+    setNewEmpMonthlyDraft(null);
     onNotify(`تمت إضافة ${name} بنجاح`);
   };
 
@@ -196,857 +432,700 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
     onNotify(`تم حذف ${emp.name}`);
   };
 
-  const leaveEmp = branch.emps.find((e) => e.id === leaveEmpId) || null;
-
-  const handleSaveMonthlyLeave = () => {
-    if (!leaveEmp) return;
-    const item: MonthlyLeave = {
-      id: `ml_${Date.now()}`,
-      startDate: leaveStartIso,
-      daysCount: Math.max(1, leaveDaysCount),
-      skipWeeklyInSameWeek: leaveSkipWeekly,
-      note: leaveNote.trim() || undefined,
-    };
-    updateEmployee(leaveEmp.id, {
-      monthlyLeaves: [...(leaveEmp.monthlyLeaves || []), item],
-    });
-    setLeaveNote('');
-    onNotify(`تم حفظ الإجازة الشهرية لـ ${leaveEmp.name}`);
-  };
-
-  const handleDeleteMonthlyLeave = (leaveId: string) => {
-    if (!leaveEmp) return;
-    updateEmployee(leaveEmp.id, {
-      monthlyLeaves: (leaveEmp.monthlyLeaves || []).filter((m) => m.id !== leaveId),
-    });
-    onNotify('تم حذف الإجازة الشهرية');
-  };
+  const leaveListEmp = branch.emps.find((e) => e.id === leaveListEmpId) || null;
+  const weeklyDialEmp =
+    weeklyDialTarget?.mode === 'emp'
+      ? branch.emps.find((e) => e.id === weeklyDialTarget.empId) || null
+      : null;
+  const monthlyDialEmp =
+    monthlyDialTarget?.mode === 'emp'
+      ? branch.emps.find((e) => e.id === monthlyDialTarget.empId) || null
+      : null;
 
   const filteredTeam = branch.emps.filter(
     (e) => !e.suspended && e.name.toLowerCase().includes(teamSearch.trim().toLowerCase())
   );
 
-  const teamByShift = useMemo(
-    () => ({
-      morning: filteredTeam.filter((e) => e.shift === 'morning'),
-      between: filteredTeam.filter((e) => e.shift === 'between'),
-      evening: filteredTeam.filter((e) => e.shift === 'evening'),
-    }),
-    [filteredTeam]
-  );
+  const teamByShift = {
+    morning: filteredTeam.filter((e) => e.shift === 'morning'),
+    between: filteredTeam.filter((e) => e.shift === 'between'),
+    evening: filteredTeam.filter((e) => e.shift === 'evening'),
+  };
 
-  const morningCfg = branch.shiftSchedules.morning;
-  const eveningCfg = branch.shiftSchedules.evening;
-  const betweenCfg = branch.shiftSchedules.between;
+  const editModalItems = !editModalShift
+    ? []
+    : activeDayPlan.filter(
+        (p) =>
+          p.plannedShift === editModalShift ||
+          p.plannedShift === 'between' ||
+          (p.plannedShift === 'off' &&
+            (p.emp.shift === editModalShift || p.emp.shift === 'between'))
+      );
 
-  const editModalItems = useMemo(() => {
-    if (!editModalShift) return [];
-    return activeDayPlan.filter(
-      (p) =>
-        p.plannedShift === editModalShift ||
-        p.plannedShift === 'between' ||
-        (p.plannedShift === 'off' &&
-          (p.emp.shift === editModalShift || p.emp.shift === 'between'))
-    );
-  }, [activeDayPlan, editModalShift]);
+  // =========================================================================
+  // HUB VIEW (WhatsApp Dark Mode styled)
+  // =========================================================================
+  if (tab === 'hub') {
+    const hubItems = [
+      {
+        id: 'today' as PlannerTab,
+        title: 'لوحة اليوم والجدول',
+        desc: 'عرض الصباحي والمسائي لأي يوم من السبت للجمعة وتعديل الحضور',
+        icon: CalendarDays,
+        badge: `${dayGroups.totalWorking} حاضر اليوم`,
+        color: 'bg-[#00A884]/15 text-[#008069] dark:text-[#00A884]',
+      },
+      {
+        id: 'team' as PlannerTab,
+        title: 'الموظفون والإجازات',
+        desc: 'إضافة موظف مع إجازته الأسبوعية والشهرية عبر الساعة الدائرية',
+        icon: Users,
+        badge: `${branch.emps.filter((e) => !e.suspended).length} موظف`,
+        color: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+      },
+    ];
 
-  return (
-    <div className="space-y-5">
-      {/* Top Planner Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
-        <div>
-          <div className="text-xs font-bold text-amber-700">
-            خطة الورديات الأسبوعية · تتجدد التواريخ تلقائياً
+    return (
+      <div className="wa-chat-bg flex h-full flex-col overflow-y-auto p-4 sm:p-6">
+        <div className="mx-auto my-auto w-full max-w-2xl rounded-2xl border border-[#d1d7db] bg-white p-6 shadow-md dark:border-white/10 dark:bg-[#202C33]">
+          <div className="mb-6 text-center">
+            <div className="text-xs font-extrabold text-[#008069] dark:text-[#00A884]">
+              خطة فرع {branch.name}
+            </div>
+            <h2 className="mt-1 text-xl font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+              اختر القسم الذي تريد فتحه
+            </h2>
+            <p className="mt-1 text-xs font-semibold text-[#54656f] tabular-nums dark:text-[#8696A0]">
+              الصباحي {formatTime12(morningCfg.tin)} — {formatTime12(morningCfg.tout)} · المسائي{' '}
+              {formatTime12(eveningCfg.tin)} — {formatTime12(eveningCfg.tout)}
+            </p>
           </div>
-          <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">
-            فرع {branch.name}
-          </h2>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {isAdmin && (
-            <select
-              value={branch.id}
-              onChange={(e) => onSelectBranch(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-slate-900"
-            >
-              {state.branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  فرع {b.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* 3 Clean Spacious Tabs */}
-          <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
-            {[
-              { id: 'today', label: 'لوحة اليوم', icon: CalendarDays },
-              { id: 'team', label: 'الموظفون والإجازات', icon: Users },
-              { id: 'branch', label: 'إعدادات الشفتات', icon: Settings },
-            ].map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.id;
+          <div className="grid gap-4 sm:grid-cols-2">
+            {hubItems.map((item) => {
+              const Icon = item.icon;
               return (
                 <button
-                  key={t.id}
-                  id={`plannerTab_${t.id}`}
+                  key={item.id}
+                  id={`plannerTab_${item.id}`}
                   type="button"
-                  onClick={() => setTab(t.id as PlannerTab)}
-                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-extrabold transition-colors ${
-                    active
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  onClick={() => setTab(item.id)}
+                  className="flex flex-col justify-between rounded-2xl border border-[#d1d7db] bg-[#f8fafc] p-5 text-right transition-all hover:border-[#00A884] hover:bg-[#e7fce3]/40 dark:border-white/10 dark:bg-[#111B21] dark:hover:bg-[#005C4B]/25"
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{t.label}</span>
+                  <div>
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div
+                        className={`flex h-12 w-12 items-center justify-center rounded-full ${item.color}`}
+                      >
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <span className="text-xs font-extrabold text-[#54656f] dark:text-[#8696A0]">
+                        {item.badge}
+                      </span>
+                    </div>
+                    <div className="text-base font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+                      {item.title}
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-[#54656f] dark:text-[#8696A0]">
+                      {item.desc}
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* TAB 1: لوحة اليوم (الأيام ثابتة كطابور + بطاقتان أفقيتان فقط) */}
-      {tab === 'today' && (
-        <div className="space-y-4">
-          {/* Rolling 7-Day Fixed Queue Ribbon (No Previous/Next Week buttons needed!) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-              {weekQueue.map((wd) => {
-                const isSel = wd.iso === activeDayObj.iso;
-                const isToday = wd.offsetFromToday === 0;
-                const isTomorrow = wd.offsetFromToday === 1;
-                return (
-                  <button
-                    key={wd.dayOfWeek}
-                    type="button"
-                    onClick={() => setSelectedIso(wd.iso)}
-                    className={`rounded-xl border px-3 py-2.5 text-right transition-colors ${
-                      isSel
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs font-extrabold">
-                      <span>{wd.arName}</span>
-                      {isToday && (
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] ${
-                            isSel
-                              ? 'bg-amber-400/20 text-amber-300'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          اليوم
-                        </span>
-                      )}
-                      {isTomorrow && (
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] ${
-                            isSel
-                              ? 'bg-emerald-400/20 text-emerald-300'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}
-                        >
-                          غداً
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      className={`font-mono-num mt-1 text-xs font-bold ${
-                        isSel ? 'text-slate-300' : 'text-slate-500'
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-[#EFEAE2] dark:bg-[#0B141A]">
+      {/* WhatsApp-Style Top Header for Weekly Plan */}
+      <header className="flex h-[56px] shrink-0 items-center justify-between gap-2 bg-[#008069] px-3 text-white shadow-xs dark:bg-[#202C33]">
+        <div className="flex min-w-0 items-center gap-2">
+          {onBackToBranchChats && (
+            <button
+              type="button"
+              onClick={onBackToBranchChats}
+              aria-label="العودة للمحادثات"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
+            >
+              <ArrowRight className="h-6 w-6" />
+            </button>
+          )}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00A884] text-white">
+            <CalendarDays className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-extrabold sm:text-base">
+              خطة الأسبوع — فرع {branch.name}
+            </h2>
+          </div>
+        </div>
+
+        {/* Clean Segmented Toggle: Today vs Team */}
+        <div className="flex shrink-0 items-center gap-1 rounded-lg bg-black/20 p-1">
+          {[
+            { id: 'today', label: 'الجدول' },
+            { id: 'team', label: 'الإجازات' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              id={`plannerTab_${t.id}`}
+              type="button"
+              onClick={() => setTab(t.id as PlannerTab)}
+              className={`min-h-[34px] whitespace-nowrap rounded-md px-3 text-xs font-extrabold transition-colors ${
+                tab === t.id
+                  ? 'bg-white text-[#008069] dark:bg-[#00A884] dark:text-[#111B21]'
+                  : 'text-white/85 hover:bg-white/10'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <div className="wa-chat-bg wa-scroll flex-1 overflow-y-auto p-3 sm:p-5">
+        {/* TAB 1: لوحة اليوم */}
+        {tab === 'today' && (
+          <div className="mx-auto max-w-4xl space-y-3">
+            {/* 7-Day Horizontal Scroller */}
+            <div className="rounded-2xl border border-[#d1d7db] bg-white p-2.5 shadow-xs sm:p-3 dark:border-white/10 dark:bg-[#202C33]">
+              <div className="no-scrollbar flex gap-1.5 overflow-x-auto sm:grid sm:grid-cols-7">
+                {weekQueue.map((wd) => {
+                  const isSel = wd.iso === activeDayObj.iso;
+                  const isToday = wd.offsetFromToday === 0;
+                  const isTomorrow = wd.offsetFromToday === 1;
+                  return (
+                    <button
+                      key={wd.dayOfWeek}
+                      type="button"
+                      onClick={() => setSelectedIso(wd.iso)}
+                      className={`min-h-[52px] min-w-[82px] shrink-0 rounded-xl border px-2.5 py-2 text-right transition-colors sm:min-w-0 ${
+                        isSel
+                          ? 'border-[#008069] bg-[#008069] text-white dark:border-[#00A884] dark:bg-[#00A884] dark:text-[#111B21]'
+                          : 'border-[#e9edef] bg-[#f8fafc] text-[#111b21] hover:bg-[#f0f2f5] dark:border-white/5 dark:bg-[#111B21] dark:text-[#E9EDEF] dark:hover:bg-[#182229]'
                       }`}
                     >
-                      {wd.shortDate}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Simplified Day Header + 2 Side-by-Side Horizontal Cards */}
-          <div
-            id="plannerDaySummary"
-            className="rounded-2xl border border-slate-200 bg-white p-5"
-          >
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900">
-                  توزيع ورديات يوم {activeDayObj.arName} · {activeDayObj.shortDate}
-                </h3>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  إجمالي الحضور: {dayGroups.totalWorking} · غير المتاحين اليوم: {dayGroups.totalOff}
-                </p>
+                      <div className="flex items-center justify-between gap-1 text-[11px] font-extrabold sm:text-xs">
+                        <span>{wd.arName}</span>
+                        {(isToday || isTomorrow) && (
+                          <span
+                            className={`text-[10px] font-extrabold ${
+                              isSel
+                                ? 'text-white dark:text-[#111B21]'
+                                : isTomorrow
+                                ? 'text-[#008069] dark:text-[#00A884]'
+                                : 'text-amber-600 dark:text-amber-400'
+                            }`}
+                          >
+                            {isToday ? 'اليوم' : 'غداً'}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className={`font-mono-num mt-0.5 text-[10px] font-bold sm:text-xs ${
+                          isSel ? 'text-white/85 dark:text-[#111B21]/80' : 'text-[#54656f] dark:text-[#8696A0]'
+                        }`}
+                      >
+                        {wd.shortDate}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+              <div className="mt-2 text-center text-[11px] font-bold text-[#54656f] dark:text-[#8696A0]">
+                الأيام والتواريخ تتغير أوتوماتيك كل يوم حسب التقويم
+              </div>
+            </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTab('team')}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-extrabold text-slate-800 hover:bg-slate-100"
-                >
-                  <Users className="h-4 w-4 text-amber-700" />
-                  <span>إدارة الموظفين والإجازات</span>
-                </button>
+            <div
+              id="plannerDaySummary"
+              className="rounded-2xl border border-[#d1d7db] bg-white p-3 shadow-xs sm:p-5 dark:border-white/10 dark:bg-[#202C33]"
+            >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#e9edef] pb-3 sm:mb-4 dark:border-white/10">
+                <div>
+                  <h3 className="text-sm font-extrabold text-[#111b21] sm:text-base dark:text-[#E9EDEF]">
+                    {activeDayObj.arName} · {activeDayObj.shortDate}
+                  </h3>
+                  <p className="mt-0.5 text-xs font-bold text-[#54656f] tabular-nums dark:text-[#8696A0]">
+                    الحضور: {dayGroups.totalWorking} · الإجازات: {dayGroups.totalOff}
+                  </p>
+                </div>
+
                 {onGoToAvailability && (
                   <button
                     type="button"
+                    id="plannerGoAvailabilityBtn"
                     onClick={() => onGoToAvailability('morning')}
-                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-extrabold text-white hover:bg-slate-800"
+                    className="flex min-h-[42px] items-center gap-1.5 rounded-full bg-[#008069] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#016b58] dark:bg-[#00A884] dark:text-[#111B21] dark:hover:bg-[#06CF9C]"
                   >
-                    تسجيل وإرسال توفر الغد
+                    <Send className="h-3.5 w-3.5 -scale-x-100" />
+                    <span>إرسال توفر الغد للمحادثة</span>
                   </button>
                 )}
               </div>
-            </div>
 
-            {/* Horizontal 2-Column Layout: Morning Card | Evening Card */}
-            <div className="grid gap-5 md:grid-cols-2">
-              {/* CARD 1: الوردية الصباحية + بتوين */}
-              <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
-                <div>
-                  <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-                        <Sun className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-base font-extrabold text-slate-900">
-                          {morningCfg.label}
-                        </h4>
-                        <div className="font-mono-num text-xs font-semibold text-slate-500">
-                          {formatTime12(morningCfg.tin)} — {formatTime12(morningCfg.tout)}
+              {/* Side-by-side Morning & Evening Cards */}
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
+                {/* Morning */}
+                <div className="flex min-w-0 flex-col justify-between rounded-2xl border border-[#e9edef] bg-[#f8fafc] p-2.5 sm:p-4 dark:border-white/10 dark:bg-[#111B21]">
+                  <div>
+                    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1 border-b border-[#e9edef] pb-2 dark:border-white/10">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                          <Sun className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="truncate text-xs font-extrabold text-[#111b21] sm:text-sm dark:text-[#E9EDEF]">
+                            صباحي
+                          </h4>
+                          <div className="font-mono-num truncate text-[10px] text-[#54656f] dark:text-[#8696A0]">
+                            {formatTime12(morningCfg.tin)}
+                          </div>
                         </div>
                       </div>
+                      <span className="text-[11px] font-extrabold text-[#008069] tabular-nums dark:text-[#00A884]">
+                        {dayGroups.morningAvail.length + dayGroups.betweenAvail.length} متاح
+                      </span>
                     </div>
 
-                    <span className="rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-extrabold text-emerald-800">
-                      {dayGroups.morningAvail.length} متاح
-                      {dayGroups.betweenAvail.length > 0
-                        ? ` + ${dayGroups.betweenAvail.length} بتوين`
-                        : ''}
-                    </span>
-                  </div>
-
-                  {/* Available in Morning + Between */}
-                  <div className="mb-2 text-xs font-extrabold text-emerald-700">
-                    ✓ المتاحون في الصباحي ({dayGroups.morningAvail.length})
-                    {dayGroups.betweenAvail.length > 0 && (
-                      <span className="text-amber-700">
-                        {' '}
-                        + {dayGroups.betweenAvail.length} بتوين (من{' '}
-                        {formatTime12(betweenCfg.tin)})
-                      </span>
-                    )}
-                  </div>
-
-                  {dayGroups.morningAvail.length === 0 &&
-                  dayGroups.betweenAvail.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-slate-200 bg-white py-4 text-center text-xs text-slate-400">
-                      لا يوجد متاحون في الصباحي لهذا اليوم
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {dayGroups.morningAvail.map((p) => (
                         <div
                           key={p.emp.id}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"
+                          className="flex items-center justify-between gap-1 rounded-xl bg-white px-2.5 py-2 shadow-2xs dark:bg-[#202C33]"
                         >
-                          <div>
-                            <div className="text-sm font-extrabold text-slate-900">
-                              {p.emp.name}
-                            </div>
-                            {p.isOverridden && (
-                              <div className="text-[11px] font-bold text-amber-700">
-                                معدل لهذا اليوم
-                              </div>
-                            )}
-                          </div>
-                          <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                            متاح
+                          <span className="truncate text-xs font-bold text-[#111b21] sm:text-sm dark:text-[#E9EDEF]">
+                            {p.emp.name}
+                          </span>
+                          <span className="shrink-0 text-[10px] font-extrabold text-[#008069] dark:text-[#00A884]">
+                            حضور
                           </span>
                         </div>
                       ))}
-
                       {dayGroups.betweenAvail.map((p) => (
                         <div
-                          key={`${p.emp.id}_btw_m`}
-                          className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3"
+                          key={`${p.emp.id}_bm`}
+                          className="flex items-center justify-between gap-1 rounded-xl bg-amber-500/10 px-2.5 py-2"
                         >
-                          <div>
-                            <div className="text-sm font-extrabold text-slate-900">
-                              {p.emp.name}
-                            </div>
-                            <div className="text-[11px] font-bold text-amber-800">
-                              بتوين · من {formatTime12(betweenCfg.tin)}
-                            </div>
-                          </div>
-                          <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                            متاح
+                          <span className="truncate text-xs font-bold text-[#111b21] sm:text-sm dark:text-[#E9EDEF]">
+                            {p.emp.name}
+                          </span>
+                          <span className="shrink-0 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                            بتوين
                           </span>
                         </div>
                       ))}
                     </div>
-                  )}
 
-                  {/* Unavailable in Morning (embedded cleanly inside same card) */}
-                  {dayGroups.morningOff.length > 0 && (
-                    <div className="mt-4">
-                      <div className="mb-2 text-xs font-extrabold text-rose-700">
-                        غير المتاحين (صباحي):
-                      </div>
-                      <div className="space-y-2">
+                    {dayGroups.morningOff.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        <div className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                          إجازة:
+                        </div>
                         {dayGroups.morningOff.map((p) => (
                           <div
-                            key={`${p.emp.id}_off_m`}
-                            className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-2.5"
+                            key={`${p.emp.id}_om`}
+                            className="flex items-center justify-between gap-1 rounded-xl bg-rose-500/10 px-2.5 py-1.5"
                           >
-                            <div>
-                              <span className="text-sm font-bold text-rose-950">
-                                {p.emp.name}
-                              </span>
-                              {p.emp.shift === 'between' && (
-                                <span className="mr-1.5 text-[11px] font-bold text-amber-800">
-                                  (بتوين)
-                                </span>
-                              )}
-                            </div>
-                            <span className="rounded-md bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-800">
+                            <span className="truncate text-xs font-bold text-rose-800 dark:text-rose-300">
+                              {p.emp.name}
+                            </span>
+                            <span className="truncate text-[10px] text-rose-700 dark:text-rose-400">
                               {p.reason}
                             </span>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setEditModalShift('morning')}
-                  className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white py-2.5 text-xs font-extrabold text-slate-800 hover:bg-slate-100"
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                  <span>+ تعديل أفراد الصباحي لهذا اليوم</span>
-                </button>
-              </div>
-
-              {/* CARD 2: الوردية المسائية + بتوين */}
-              <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
-                <div>
-                  <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-amber-300">
-                        <Moon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-base font-extrabold text-slate-900">
-                          {eveningCfg.label}
-                        </h4>
-                        <div className="font-mono-num text-xs font-semibold text-slate-500">
-                          {formatTime12(eveningCfg.tin)} — {formatTime12(eveningCfg.tout)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <span className="rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-extrabold text-emerald-800">
-                      {dayGroups.eveningAvail.length} متاح
-                      {dayGroups.betweenAvail.length > 0
-                        ? ` + ${dayGroups.betweenAvail.length} بتوين`
-                        : ''}
-                    </span>
-                  </div>
-
-                  {/* Available in Evening + Between */}
-                  <div className="mb-2 text-xs font-extrabold text-emerald-700">
-                    ✓ المتاحون في المسائي ({dayGroups.eveningAvail.length})
-                    {dayGroups.betweenAvail.length > 0 && (
-                      <span className="text-amber-700">
-                        {' '}
-                        + {dayGroups.betweenAvail.length} بتوين (حتى{' '}
-                        {formatTime12(betweenCfg.tout)})
-                      </span>
                     )}
                   </div>
 
-                  {dayGroups.eveningAvail.length === 0 &&
-                  dayGroups.betweenAvail.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-slate-200 bg-white py-4 text-center text-xs text-slate-400">
-                      لا يوجد متاحون في المسائي لهذا اليوم
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditModalShift('morning')}
+                    className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-[#d1d7db] bg-white px-2 py-2 text-xs font-extrabold text-[#111b21] hover:bg-[#f0f2f5] dark:border-white/10 dark:bg-[#202C33] dark:text-[#E9EDEF] dark:hover:bg-white/10"
+                  >
+                    <Edit3 className="h-3.5 w-3.5 text-[#008069] dark:text-[#00A884]" />
+                    <span>تعديل الصباحي</span>
+                  </button>
+                </div>
+
+                {/* Evening */}
+                <div className="flex min-w-0 flex-col justify-between rounded-2xl border border-[#e9edef] bg-[#f8fafc] p-2.5 sm:p-4 dark:border-white/10 dark:bg-[#111B21]">
+                  <div>
+                    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1 border-b border-[#e9edef] pb-2 dark:border-white/10">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#008069]/15 text-[#008069] dark:bg-[#00A884]/15 dark:text-[#00A884]">
+                          <Moon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="truncate text-xs font-extrabold text-[#111b21] sm:text-sm dark:text-[#E9EDEF]">
+                            مسائي
+                          </h4>
+                          <div className="font-mono-num truncate text-[10px] text-[#54656f] dark:text-[#8696A0]">
+                            {formatTime12(eveningCfg.tin)}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-extrabold text-[#008069] tabular-nums dark:text-[#00A884]">
+                        {dayGroups.eveningAvail.length + dayGroups.betweenAvail.length} متاح
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5">
                       {dayGroups.eveningAvail.map((p) => (
                         <div
                           key={p.emp.id}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"
+                          className="flex items-center justify-between gap-1 rounded-xl bg-white px-2.5 py-2 shadow-2xs dark:bg-[#202C33]"
                         >
-                          <div>
-                            <div className="text-sm font-extrabold text-slate-900">
-                              {p.emp.name}
-                            </div>
-                            {p.isOverridden && (
-                              <div className="text-[11px] font-bold text-amber-700">
-                                معدل لهذا اليوم
-                              </div>
-                            )}
-                          </div>
-                          <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                            متاح
+                          <span className="truncate text-xs font-bold text-[#111b21] sm:text-sm dark:text-[#E9EDEF]">
+                            {p.emp.name}
+                          </span>
+                          <span className="shrink-0 text-[10px] font-extrabold text-[#008069] dark:text-[#00A884]">
+                            حضور
                           </span>
                         </div>
                       ))}
-
                       {dayGroups.betweenAvail.map((p) => (
                         <div
-                          key={`${p.emp.id}_btw_e`}
-                          className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3"
+                          key={`${p.emp.id}_be`}
+                          className="flex items-center justify-between gap-1 rounded-xl bg-amber-500/10 px-2.5 py-2"
                         >
-                          <div>
-                            <div className="text-sm font-extrabold text-slate-900">
-                              {p.emp.name}
-                            </div>
-                            <div className="text-[11px] font-bold text-amber-800">
-                              بتوين · حتى {formatTime12(betweenCfg.tout)}
-                            </div>
-                          </div>
-                          <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                            متاح
+                          <span className="truncate text-xs font-bold text-[#111b21] sm:text-sm dark:text-[#E9EDEF]">
+                            {p.emp.name}
+                          </span>
+                          <span className="shrink-0 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                            بتوين
                           </span>
                         </div>
                       ))}
                     </div>
-                  )}
 
-                  {/* Unavailable in Evening (embedded cleanly inside same card) */}
-                  {dayGroups.eveningOff.length > 0 && (
-                    <div className="mt-4">
-                      <div className="mb-2 text-xs font-extrabold text-rose-700">
-                        غير المتاحين (مسائي):
-                      </div>
-                      <div className="space-y-2">
+                    {dayGroups.eveningOff.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        <div className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                          إجازة:
+                        </div>
                         {dayGroups.eveningOff.map((p) => (
                           <div
-                            key={`${p.emp.id}_off_e`}
-                            className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-2.5"
+                            key={`${p.emp.id}_oe`}
+                            className="flex items-center justify-between gap-1 rounded-xl bg-rose-500/10 px-2.5 py-1.5"
                           >
-                            <div>
-                              <span className="text-sm font-bold text-rose-950">
-                                {p.emp.name}
-                              </span>
-                              {p.emp.shift === 'between' && (
-                                <span className="mr-1.5 text-[11px] font-bold text-amber-800">
-                                  (بتوين)
-                                </span>
-                              )}
-                            </div>
-                            <span className="rounded-md bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-800">
+                            <span className="truncate text-xs font-bold text-rose-800 dark:text-rose-300">
+                              {p.emp.name}
+                            </span>
+                            <span className="truncate text-[10px] text-rose-700 dark:text-rose-400">
                               {p.reason}
                             </span>
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditModalShift('evening')}
+                    className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-[#d1d7db] bg-white px-2 py-2 text-xs font-extrabold text-[#111b21] hover:bg-[#f0f2f5] dark:border-white/10 dark:bg-[#202C33] dark:text-[#E9EDEF] dark:hover:bg-white/10"
+                  >
+                    <Edit3 className="h-3.5 w-3.5 text-[#008069] dark:text-[#00A884]" />
+                    <span>تعديل المسائي</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: الموظفون والإجازات */}
+        {tab === 'team' && (
+          <div className="mx-auto max-w-4xl space-y-4">
+            <div className="rounded-2xl border border-[#d1d7db] bg-white p-4 shadow-xs sm:p-5 dark:border-white/10 dark:bg-[#202C33]">
+              <h3 className="mb-1 text-base font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+                إضافة موظف جديد مع إجازته
+              </h3>
+              <p className="mb-4 text-xs text-[#54656f] dark:text-[#8696A0]">
+                اكتب الاسم، اختر الشفت، وحدد الإجازة الأسبوعية والشهرية بالساعة الدائرية
+              </p>
+              <div className="space-y-3.5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-[#54656f] dark:text-[#8696A0]">
+                      اسم الموظف
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="مثال: أحمد طارق"
+                      value={newEmpName}
+                      onChange={(e) => setNewEmpName(e.target.value)}
+                      className="min-h-[46px] w-full rounded-xl border border-[#d1d7db] bg-[#f8fafc] px-3.5 py-2 text-sm font-bold text-[#111b21] outline-none focus:border-[#00A884] dark:border-white/10 dark:bg-[#111B21] dark:text-[#E9EDEF]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-[#54656f] dark:text-[#8696A0]">
+                      الشفت
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['morning', 'between', 'evening'] as ShiftType[]).map((sh) => (
+                        <button
+                          key={sh}
+                          type="button"
+                          onClick={() => setNewEmpShift(sh)}
+                          className={`min-h-[46px] rounded-xl text-xs font-extrabold transition-colors ${
+                            newEmpShift === sh
+                              ? 'bg-[#008069] text-white dark:bg-[#00A884] dark:text-[#111B21]'
+                              : 'border border-[#d1d7db] bg-[#f8fafc] text-[#3b4a54] dark:border-white/10 dark:bg-[#111B21] dark:text-[#AEBAC1]'
+                          }`}
+                        >
+                          {SHIFTS_AR[sh]}
+                        </button>
+                      ))}
                     </div>
-                  )}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setWeeklyDialTarget({ mode: 'new' })}
+                    className="flex min-h-[48px] items-center justify-between gap-2 rounded-xl border border-[#d1d7db] bg-[#f8fafc] px-4 py-2.5 text-right transition-colors hover:border-[#00A884] dark:border-white/10 dark:bg-[#111B21]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-[#008069] dark:text-[#00A884]" />
+                      <span className="text-xs font-bold text-[#54656f] dark:text-[#8696A0]">
+                        الإجازة الأسبوعية:
+                      </span>
+                    </div>
+                    <span className="text-xs font-extrabold text-[#008069] dark:text-[#00A884]">
+                      {newEmpOffDay === null ? 'بدون' : DAY_NAMES_AR[newEmpOffDay]}
+                    </span>
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMonthlyDialTarget({ mode: 'new' })}
+                      className="flex min-h-[48px] flex-1 items-center justify-between gap-2 rounded-xl border border-[#d1d7db] bg-[#f8fafc] px-4 py-2.5 text-right transition-colors hover:border-[#00A884] dark:border-white/10 dark:bg-[#111B21]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-[#008069] dark:text-[#00A884]" />
+                        <span className="text-xs font-bold text-[#54656f] dark:text-[#8696A0]">
+                          إجازة شهرية:
+                        </span>
+                      </div>
+                      <span className="text-xs font-extrabold text-[#008069] dark:text-[#00A884]">
+                        {newEmpMonthlyDraft
+                          ? `يوم ${newEmpMonthlyDraft.dayOfMonth} (${newEmpMonthlyDraft.daysCount} يوم)`
+                          : 'تحديد بالدائرية'}
+                      </span>
+                    </button>
+                    {newEmpMonthlyDraft && (
+                      <button
+                        type="button"
+                        onClick={() => setNewEmpMonthlyDraft(null)}
+                        aria-label="مسح الإجازة الشهرية"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-500"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setEditModalShift('evening')}
-                  className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white py-2.5 text-xs font-extrabold text-slate-800 hover:bg-slate-100"
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                  <span>+ تعديل أفراد المسائي لهذا اليوم</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: الموظفون والإجازات (مقسم حسب الشفت + بطاقات خفيفة وبسيطة) */}
-      {tab === 'team' && (
-        <div className="space-y-5">
-          {/* Add Employee Card — Spacious & Simple */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="mb-1 text-base font-extrabold text-slate-900">
-              إضافة موظف جديد
-            </h3>
-            <p className="mb-4 text-xs text-slate-500">
-              اكتب الاسم واختر الشفت ويوم الإجازة الأسبوعية فقط
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">
-                  اسم الموظف
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: أحمد طارق"
-                  value={newEmpName}
-                  onChange={(e) => setNewEmpName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm font-bold outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">
-                  الشفت
-                </label>
-                <select
-                  value={newEmpShift}
-                  onChange={(e) => setNewEmpShift(e.target.value as ShiftType)}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold outline-none focus:border-slate-900"
-                >
-                  <option value="morning">الوردية الصباحية</option>
-                  <option value="between">بتوين (يغطي الصباحي والمسائي)</option>
-                  <option value="evening">الوردية المسائية</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">
-                  الإجازة الأسبوعية
-                </label>
-                <select
-                  value={newEmpOffDay}
-                  onChange={(e) => setNewEmpOffDay(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold outline-none focus:border-slate-900"
-                >
-                  <option value="">بدون إجازة</option>
-                  {WEEK_ORDER_SAT_FRI.map((d) => (
-                    <option key={d} value={d}>
-                      {DAY_NAMES_AR[d]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  type="button"
                   onClick={handleAddEmployee}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800"
+                  className="flex min-h-[48px] w-full items-center justify-center gap-1.5 rounded-full bg-[#008069] py-2.5 text-sm font-extrabold text-white hover:bg-[#016b58] dark:bg-[#00A884] dark:text-[#111B21] dark:hover:bg-[#06CF9C]"
                 >
-                  <Plus className="h-4 w-4 text-amber-300" />
+                  <Plus className="h-4 w-4" />
                   <span>إضافة للطاقم</span>
                 </button>
               </div>
             </div>
-          </div>
 
-          {/* Search + Light Divided Cards per Shift */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900">
-                  تنظيم الموظفين والإجازات ({filteredTeam.length})
-                </h3>
-                <p className="text-xs text-slate-500">
-                  كل موظف في بطاقة خفيفة لتعديل الشفت أو الإجازة بسهولة
-                </p>
+            <div className="rounded-2xl border border-[#d1d7db] bg-white p-4 shadow-xs sm:p-5 dark:border-white/10 dark:bg-[#202C33]">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edef] pb-4 dark:border-white/10">
+                <div>
+                  <h3 className="text-base font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+                    تنظيم الموظفين والإجازات ({filteredTeam.length})
+                  </h3>
+                  <p className="text-xs text-[#54656f] dark:text-[#8696A0]">
+                    اضغط على الإجازة للتعديل بالساعة الدائرية
+                  </p>
+                </div>
+                <div className="relative w-full sm:w-64">
+                  <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#667781]" />
+                  <input
+                    type="text"
+                    placeholder="بحث بالاسم..."
+                    value={teamSearch}
+                    onChange={(e) => setTeamSearch(e.target.value)}
+                    className="min-h-[42px] w-full rounded-full bg-[#f0f2f5] py-2 pl-3 pr-9 text-sm text-[#111b21] outline-none focus:ring-1 focus:ring-[#00A884] dark:bg-[#111B21] dark:text-[#E9EDEF]"
+                  />
+                </div>
               </div>
-              <div className="relative w-full sm:w-64">
-                <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="بحث بالاسم..."
-                  value={teamSearch}
-                  onChange={(e) => setTeamSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 py-2 pl-3 pr-9 text-sm outline-none focus:border-slate-900"
-                />
-              </div>
-            </div>
 
-            <div className="space-y-6">
-              {(
-                [
+              <div className="space-y-6">
+                {[
                   {
                     sh: 'morning' as ShiftType,
                     title: 'الوردية الصباحية',
                     hint: `${formatTime12(morningCfg.tin)} — ${formatTime12(morningCfg.tout)}`,
                     items: teamByShift.morning,
-                    accent: 'border-amber-200 bg-amber-50/40',
                   },
                   {
                     sh: 'between' as ShiftType,
                     title: 'موظفو بتوين',
                     hint: `يظهرون ضمن الصباحي والمسائي (${formatTime12(betweenCfg.tin)} — ${formatTime12(betweenCfg.tout)})`,
                     items: teamByShift.between,
-                    accent: 'border-amber-300 bg-amber-50/60',
                   },
                   {
                     sh: 'evening' as ShiftType,
                     title: 'الوردية المسائية',
                     hint: `${formatTime12(eveningCfg.tin)} — ${formatTime12(eveningCfg.tout)}`,
                     items: teamByShift.evening,
-                    accent: 'border-slate-200 bg-slate-50/60',
                   },
-                ]
-              ).map((sec) => (
-                <section key={sec.sh}>
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h4 className="text-sm font-extrabold text-slate-900">
+                ].map((sec) => (
+                  <section key={sec.sh}>
+                    <div className="mb-2.5">
+                      <h4 className="text-sm font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
                         {sec.title} ({sec.items.length})
                       </h4>
-                      <p className="text-xs text-slate-500">{sec.hint}</p>
+                      <p className="text-xs text-[#54656f] dark:text-[#8696A0]">{sec.hint}</p>
                     </div>
-                  </div>
 
-                  {sec.items.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 py-4 text-center text-xs text-slate-400">
-                      لا يوجد موظفون في هذا القسم
-                    </div>
-                  ) : (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {sec.items.map((emp) => (
-                        <div
-                          key={emp.id}
-                          className={`rounded-xl border p-4 transition-colors ${sec.accent}`}
-                        >
-                          <div className="mb-3 flex items-center justify-between gap-2">
-                            <div className="text-base font-extrabold text-slate-900">
-                              {emp.name}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteEmployee(emp)}
-                              aria-label={`حذف ${emp.name}`}
-                              className="rounded-lg border border-rose-200 bg-white p-1.5 text-rose-700 hover:bg-rose-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2.5">
-                            <div>
-                              <label className="mb-1 block text-[11px] font-bold text-slate-500">
-                                الشفت
-                              </label>
-                              <select
-                                value={emp.shift}
-                                onChange={(e) =>
-                                  updateEmployee(emp.id, {
-                                    shift: e.target.value as ShiftType,
-                                  })
-                                }
-                                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-extrabold text-slate-800"
-                              >
-                                <option value="morning">صباحي</option>
-                                <option value="between">بتوين</option>
-                                <option value="evening">مسائي</option>
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-[11px] font-bold text-slate-500">
-                                الإجازة الأسبوعية
-                              </label>
-                              <select
-                                value={
-                                  emp.weeklyOffDay === null
-                                    ? ''
-                                    : String(emp.weeklyOffDay)
-                                }
-                                onChange={(e) =>
-                                  updateEmployee(emp.id, {
-                                    weeklyOffDay:
-                                      e.target.value === ''
-                                        ? null
-                                        : Number(e.target.value),
-                                  })
-                                }
-                                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-extrabold text-slate-800"
-                              >
-                                <option value="">بدون</option>
-                                {WEEK_ORDER_SAT_FRI.map((d) => (
-                                  <option key={d} value={d}>
-                                    {DAY_NAMES_AR[d]}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLeaveEmpId(emp.id);
-                              setLeaveStartIso(cairoToday.iso);
-                              setLeaveDaysCount(3);
-                              setLeaveSkipWeekly(true);
-                              setLeaveNote('');
-                            }}
-                            className="mt-3 w-full rounded-lg border border-amber-300 bg-white py-2 text-xs font-extrabold text-amber-900 hover:bg-amber-50"
+                    {sec.items.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-[#d1d7db] py-4 text-center text-xs text-[#667781] dark:border-white/10 dark:text-[#8696A0]">
+                        لا يوجد موظفون في هذا القسم
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {sec.items.map((emp) => (
+                          <div
+                            key={emp.id}
+                            className="rounded-2xl border border-[#e9edef] bg-[#f8fafc] p-4 dark:border-white/10 dark:bg-[#111B21]"
                           >
-                            إجازة شهرية ({(emp.monthlyLeaves || []).length})
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#008069] text-sm font-extrabold text-white dark:bg-[#00A884] dark:text-[#111B21]">
+                                  {emp.name.slice(0, 1)}
+                                </div>
+                                <div className="text-base font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+                                  {emp.name}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteEmployee(emp)}
+                                aria-label={`حذف ${emp.name}`}
+                                className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 dark:text-rose-400"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
 
-      {/* TAB 3: إعدادات الشفتات والفرع (بدون تغيير كلمة السر) */}
-      {tab === 'branch' && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="mb-1 text-base font-extrabold text-slate-900">
-              بيانات الفرع ومواعيد الشفتات
-            </h3>
-            <p className="mb-4 text-xs text-slate-500">
-              تعديل اسم الفرع ومواعيد الوردية الصباحية والمسائية وبتوين
-            </p>
+                            <div className="space-y-2.5">
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {(['morning', 'between', 'evening'] as ShiftType[]).map((sh) => (
+                                  <button
+                                    key={sh}
+                                    type="button"
+                                    onClick={() => updateEmployee(emp.id, { shift: sh })}
+                                    className={`min-h-[38px] rounded-xl text-xs font-extrabold ${
+                                      emp.shift === sh
+                                        ? 'bg-[#008069] text-white dark:bg-[#00A884] dark:text-[#111B21]'
+                                        : 'border border-[#d1d7db] bg-white text-[#3b4a54] dark:border-white/10 dark:bg-[#202C33] dark:text-[#AEBAC1]'
+                                    }`}
+                                  >
+                                    {SHIFTS_AR[sh]}
+                                  </button>
+                                ))}
+                              </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">
-                  اسم الفرع
-                </label>
-                <input
-                  type="text"
-                  value={branchNameDraft}
-                  onChange={(e) => setBranchNameDraft(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold outline-none focus:border-slate-900"
-                />
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setWeeklyDialTarget({ mode: 'emp', empId: emp.id })
+                                  }
+                                  className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[#d1d7db] bg-white px-2.5 py-1.5 text-xs font-extrabold text-[#111b21] hover:border-[#00A884] dark:border-white/10 dark:bg-[#202C33] dark:text-[#E9EDEF]"
+                                >
+                                  <Clock className="h-3.5 w-3.5 text-[#008069] dark:text-[#00A884]" />
+                                  <span>
+                                    {emp.weeklyOffDay === null
+                                      ? 'أسبوعية: بدون'
+                                      : `أسبوعية: ${DAY_NAMES_AR[emp.weeklyOffDay]}`}
+                                  </span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if ((emp.monthlyLeaves || []).length === 0) {
+                                      setMonthlyDialTarget({ mode: 'emp', empId: emp.id });
+                                    } else {
+                                      setLeaveListEmpId(emp.id);
+                                    }
+                                  }}
+                                  className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[#008069] bg-white px-2.5 py-1.5 text-xs font-extrabold text-[#008069] hover:bg-[#e7fce3] dark:border-[#00A884] dark:bg-[#202C33] dark:text-[#00A884] dark:hover:bg-[#005C4B]/30"
+                                >
+                                  <CalendarDays className="h-3.5 w-3.5" />
+                                  <span>
+                                    {(emp.monthlyLeaves || []).length > 0
+                                      ? `شهرية (${emp.monthlyLeaves.length})`
+                                      : 'إجازة شهرية'}
+                                  </span>
+                                </button>
+                              </div>
+
+                              {(emp.monthlyLeaves || []).length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-0.5 text-[11px] font-bold text-[#008069] dark:text-[#00A884]">
+                                  {emp.monthlyLeaves.map((ml) => (
+                                    <span key={ml.id}>{formatLeaveSummary(ml)}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ))}
               </div>
-
-              {(['morning', 'evening', 'between'] as ShiftType[]).map((sh) => (
-                <div key={sh} className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-                  <div className="mb-2 text-xs font-extrabold text-slate-800">
-                    {SHIFTS_AR[sh]}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="text"
-                      value={schedulesDraft[sh].label}
-                      onChange={(e) =>
-                        setSchedulesDraft((prev) => ({
-                          ...prev,
-                          [sh]: { ...prev[sh], label: e.target.value },
-                        }))
-                      }
-                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold"
-                    />
-                    <input
-                      type="time"
-                      value={schedulesDraft[sh].tin}
-                      onChange={(e) =>
-                        setSchedulesDraft((prev) => ({
-                          ...prev,
-                          [sh]: { ...prev[sh], tin: e.target.value },
-                        }))
-                      }
-                      className="font-mono-num rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs"
-                    />
-                    <input
-                      type="time"
-                      value={schedulesDraft[sh].tout}
-                      onChange={(e) =>
-                        setSchedulesDraft((prev) => ({
-                          ...prev,
-                          [sh]: { ...prev[sh], tout: e.target.value },
-                        }))
-                      }
-                      className="font-mono-num rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs"
-                    />
-                  </div>
-                </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={() => {
-                  onUpdateState((prev) => ({
-                    ...prev,
-                    branches: prev.branches.map((b) =>
-                      b.id === branch.id
-                        ? {
-                            ...b,
-                            name: branchNameDraft.trim() || b.name,
-                            shiftSchedules: schedulesDraft,
-                          }
-                        : b
-                    ),
-                  }));
-                  onNotify('تم حفظ إعدادات الفرع ومواعيد الورديات');
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-extrabold text-white hover:bg-slate-800"
-              >
-                <Check className="h-4 w-4" />
-                <span>حفظ إعدادات الفرع</span>
-              </button>
             </div>
           </div>
+        )}
+      </div>
 
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="mb-1 text-base font-extrabold text-slate-900">
-                استعادة القائمة الافتراضية
-              </h3>
-              <p className="mb-4 text-xs text-slate-500">
-                استعادة الفريق الأساسي للفرع وإزالة التعديلات اليومية المؤقتة
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  const fresh = createSeedState();
-                  const freshBranch = fresh.branches.find((b) => b.id === branch.id);
-                  if (!freshBranch) {
-                    onNotify('هذا الفرع مضاف حديثاً ولا توجد له قائمة افتراضية مسبقة');
-                    return;
-                  }
-                  onUpdateState((prev) => ({
-                    ...prev,
-                    branches: prev.branches.map((b) =>
-                      b.id === branch.id ? { ...freshBranch, pin: b.pin } : b
-                    ),
-                  }));
-                  onNotify(`تمت استعادة القائمة الافتراضية لفرع ${branch.name}`);
-                }}
-                className="flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2.5 text-xs font-extrabold text-rose-800 hover:bg-rose-100"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span>استعادة القائمة الافتراضية</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: تعديل أفراد الصباحي أو المسائي لهذا اليوم */}
+      {/* Edit Day Modal */}
       {editModalShift && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
           onClick={() => setEditModalShift(null)}
         >
           <div
-            className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-[#d1d7db] bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#202C33]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="mb-4 flex items-center justify-between border-b border-[#e9edef] pb-3 dark:border-white/10">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">
+                <h3 className="text-base font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
                   تعديل أفراد {editModalShift === 'morning' ? 'الصباحي' : 'المسائي'} —{' '}
                   {activeDayObj.arName} ({activeDayObj.shortDate})
                 </h3>
-                <p className="text-xs text-slate-500">
-                  بدّل شفت أو إجازة الموظف لهذا اليوم فقط دون تعديل الجدول الأساسي
+                <p className="text-xs text-[#54656f] dark:text-[#8696A0]">
+                  اضغط على الشفت أو الإجازة لهذا اليوم فقط
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setEditModalShift(null)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                className="min-h-[40px] rounded-full border border-[#d1d7db] px-3.5 py-1 text-xs font-bold text-[#54656f] dark:border-white/10 dark:text-[#AEBAC1]"
               >
                 إغلاق
               </button>
@@ -1056,37 +1135,49 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
               {editModalItems.map((p) => (
                 <div
                   key={p.emp.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e9edef] bg-[#f8fafc] px-4 py-3 dark:border-white/10 dark:bg-[#111B21]"
                 >
                   <div>
-                    <div className="text-sm font-extrabold text-slate-900">{p.emp.name}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-sm font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+                      {p.emp.name}
+                    </div>
+                    <div className="text-xs text-[#54656f] dark:text-[#8696A0]">
                       الأساسي: {SHIFTS_AR[p.emp.shift]}
                       {p.isOverridden ? ' · معدل لهذا اليوم' : ''}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={p.plannedShift}
-                      onChange={(e) =>
-                        setDailyOverride(p.emp.id, {
-                          shift: e.target.value as ShiftType | 'off',
-                        })
-                      }
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-extrabold"
-                    >
-                      <option value="morning">صباحي</option>
-                      <option value="between">بتوين</option>
-                      <option value="evening">مسائي</option>
-                      <option value="off">إجازة يومية</option>
-                    </select>
-
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(
+                      [
+                        { val: 'morning', label: 'صباحي' },
+                        { val: 'between', label: 'بتوين' },
+                        { val: 'evening', label: 'مسائي' },
+                        { val: 'off', label: 'إجازة' },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() =>
+                          setDailyOverride(p.emp.id, { shift: opt.val })
+                        }
+                        className={`min-h-[38px] rounded-full px-3 py-1.5 text-xs font-extrabold ${
+                          p.plannedShift === opt.val
+                            ? opt.val === 'off'
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-[#008069] text-white dark:bg-[#00A884] dark:text-[#111B21]'
+                            : 'border border-[#d1d7db] bg-white text-[#3b4a54] dark:border-white/10 dark:bg-[#202C33] dark:text-[#AEBAC1]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                     {p.isOverridden && (
                       <button
                         type="button"
                         onClick={() => setDailyOverride(p.emp.id, null)}
-                        className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                        className="min-h-[38px] rounded-full border border-[#d1d7db] bg-white px-2.5 py-1.5 text-xs font-bold text-[#54656f] dark:border-white/10 dark:bg-[#202C33] dark:text-[#AEBAC1]"
                       >
                         استعادة
                       </button>
@@ -1099,146 +1190,158 @@ export const PlannerModule: React.FC<PlannerModuleProps> = ({
         </div>
       )}
 
-      {/* Modal: الإجازة الشهرية بالساعة الدائرية */}
-      {leaveEmp && (
+      {/* Monthly Leave List Modal */}
+      {leaveListEmp && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-          onClick={() => setLeaveEmpId(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+          onClick={() => setLeaveListEmpId(null)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[#d1d7db] bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#202C33]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="mb-4 flex items-center justify-between border-b border-[#e9edef] pb-3 dark:border-white/10">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">
-                  إجازة شهرية — {leaveEmp.name}
+                <h3 className="text-base font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+                  الإجازة الشهرية — {leaveListEmp.name}
                 </h3>
-                <p className="text-xs text-slate-500">
-                  اختيار الشهر واليوم عبر الساعة الدائرية
+                <p className="text-xs text-[#54656f] dark:text-[#8696A0]">
+                  يتكرر تلقائياً في الموعد المحدد كل شهر
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setLeaveEmpId(null)}
-                className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-bold"
+                onClick={() => setLeaveListEmpId(null)}
+                className="min-h-[38px] rounded-full border border-[#d1d7db] px-3 py-1 text-xs font-bold dark:border-white/10 dark:text-[#AEBAC1]"
               >
                 إغلاق
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">
-                  بداية الإجازة (الشهر واليوم)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={leaveStartIso}
-                    onClick={() => setDialOpen(true)}
-                    className="font-mono-num w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold"
-                  />
+            <button
+              type="button"
+              onClick={() => {
+                const targetId = leaveListEmp.id;
+                setLeaveListEmpId(null);
+                setMonthlyDialTarget({ mode: 'emp', empId: targetId });
+              }}
+              className="mb-4 flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-full bg-[#008069] py-2.5 text-sm font-extrabold text-white hover:bg-[#016b58] dark:bg-[#00A884] dark:text-[#111B21]"
+            >
+              <Plus className="h-4 w-4" />
+              <span>إضافة إجازة شهرية بالدائرية</span>
+            </button>
+
+            <div className="space-y-2">
+              {(leaveListEmp.monthlyLeaves || []).map((ml) => (
+                <div
+                  key={ml.id}
+                  className="flex items-center justify-between rounded-xl border border-[#e9edef] bg-[#f8fafc] px-3.5 py-2.5 text-xs dark:border-white/10 dark:bg-[#111B21]"
+                >
+                  <div>
+                    <div className="font-extrabold text-[#111b21] dark:text-[#E9EDEF]">
+                      {formatLeaveSummary(ml)}
+                    </div>
+                    <div className="text-[11px] text-[#54656f] dark:text-[#8696A0]">
+                      {ml.skipWeeklyInSameWeek
+                        ? 'بدون إجازة أسبوعية في نفس الأسبوع'
+                        : 'مع احتساب الإجازة الأسبوعية'}
+                    </div>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setDialOpen(true)}
-                    className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white"
+                    onClick={() => {
+                      updateEmployee(leaveListEmp.id, {
+                        monthlyLeaves: (leaveListEmp.monthlyLeaves || []).filter(
+                          (x) => x.id !== ml.id
+                        ),
+                      });
+                      onNotify('تم حذف الإجازة الشهرية');
+                    }}
+                    className="rounded-full bg-rose-500/15 px-3 py-1.5 font-bold text-rose-600 dark:text-rose-400"
                   >
-                    اختيار
+                    حذف
                   </button>
                 </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">
-                  عدد أيام الإجازة
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={leaveDaysCount}
-                  onChange={(e) => setLeaveDaysCount(Number(e.target.value) || 1)}
-                  className="font-mono-num w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold"
-                />
-              </div>
-
-              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={leaveSkipWeekly}
-                  onChange={(e) => setLeaveSkipWeekly(e.target.checked)}
-                />
-                <span>لا يأخذ إجازته الأسبوعية في نفس الأسبوع بعد الإجازة الشهرية</span>
-              </label>
-
-              <input
-                type="text"
-                placeholder="ملاحظة (اختياري) مثال: إجازة شهر نوفمبر"
-                value={leaveNote}
-                onChange={(e) => setLeaveNote(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              />
-
-              <button
-                type="button"
-                onClick={handleSaveMonthlyLeave}
-                className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
-              >
-                حفظ الإجازة الشهرية
-              </button>
-            </div>
-
-            <div className="mt-5 border-t border-slate-100 pt-4">
-              <div className="mb-2 text-xs font-extrabold text-slate-700">
-                الإجازات الشهرية المسجلة ({(leaveEmp.monthlyLeaves || []).length})
-              </div>
-              {(leaveEmp.monthlyLeaves || []).length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  لا توجد إجازات شهرية مسجلة لهذا الموظف بعد.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {(leaveEmp.monthlyLeaves || []).map((ml) => (
-                    <li
-                      key={ml.id}
-                      className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
-                    >
-                      <div>
-                        <span className="font-mono-num font-bold">{ml.startDate}</span> ·{' '}
-                        <span>{ml.daysCount} أيام</span>
-                        <div className="text-[11px] text-slate-500">
-                          {ml.skipWeeklyInSameWeek
-                            ? 'بدون إجازة أسبوعية في نفس الأسبوع'
-                            : 'مع احتساب الإجازة الأسبوعية'}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMonthlyLeave(ml.id)}
-                        className="font-bold text-rose-700 hover:underline"
-                      >
-                        حذف
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      <DateDialModal
-        open={dialOpen}
-        year={Number(leaveStartIso.split('-')[0]) || cairoToday.year}
-        month1={Number(leaveStartIso.split('-')[1]) || cairoToday.month + 1}
-        day={Number(leaveStartIso.split('-')[2]) || cairoToday.day}
-        onCancel={() => setDialOpen(false)}
+      <WeeklyOffDialModal
+        open={weeklyDialTarget !== null}
+        selectedDay={
+          weeklyDialTarget?.mode === 'new'
+            ? newEmpOffDay
+            : weeklyDialEmp?.weeklyOffDay ?? null
+        }
+        title={
+          weeklyDialTarget?.mode === 'new'
+            ? 'اختر يوم الإجازة الأسبوعية'
+            : weeklyDialEmp
+            ? `الإجازة الأسبوعية — ${weeklyDialEmp.name}`
+            : 'اختر يوم الإجازة الأسبوعية'
+        }
+        onCancel={() => setWeeklyDialTarget(null)}
+        onConfirm={(pickedDay) => {
+          if (weeklyDialTarget?.mode === 'new') {
+            setNewEmpOffDay(pickedDay);
+          } else if (weeklyDialEmp) {
+            updateEmployee(weeklyDialEmp.id, { weeklyOffDay: pickedDay });
+            onNotify(
+              pickedDay === null
+                ? `تم إلغاء الإجازة الأسبوعية لـ ${weeklyDialEmp.name}`
+                : `تم تحديد إجازة ${weeklyDialEmp.name}: ${DAY_NAMES_AR[pickedDay]}`
+            );
+          }
+          setWeeklyDialTarget(null);
+        }}
+      />
+
+      <MonthlyLeaveDialModal
+        open={monthlyDialTarget !== null}
+        initialDayOfMonth={
+          monthlyDialTarget?.mode === 'new'
+            ? newEmpMonthlyDraft?.dayOfMonth ?? 5
+            : 5
+        }
+        initialDaysCount={
+          monthlyDialTarget?.mode === 'new'
+            ? newEmpMonthlyDraft?.daysCount ?? 2
+            : 2
+        }
+        initialSkipWeekly={
+          monthlyDialTarget?.mode === 'new'
+            ? newEmpMonthlyDraft?.skipWeeklyInSameWeek ?? true
+            : true
+        }
+        employeeName={
+          monthlyDialTarget?.mode === 'new'
+            ? newEmpName.trim() || 'موظف جديد'
+            : monthlyDialEmp?.name
+        }
+        onCancel={() => setMonthlyDialTarget(null)}
         onConfirm={(res) => {
-          setLeaveStartIso(res.iso);
-          setDialOpen(false);
+          if (monthlyDialTarget?.mode === 'new') {
+            setNewEmpMonthlyDraft(res);
+          } else if (monthlyDialEmp) {
+            const refMonth = pad2(cairoToday.month + 1);
+            const refDay = pad2(res.dayOfMonth);
+            const newLeave: MonthlyLeave = {
+              id: `ml_${Date.now()}`,
+              recurringDayOfMonth: res.dayOfMonth,
+              startDate: `${cairoToday.year}-${refMonth}-${refDay}`,
+              daysCount: res.daysCount,
+              skipWeeklyInSameWeek: res.skipWeeklyInSameWeek,
+            };
+            updateEmployee(monthlyDialEmp.id, {
+              monthlyLeaves: [...(monthlyDialEmp.monthlyLeaves || []), newLeave],
+            });
+            onNotify(
+              `تم حفظ إجازة ${monthlyDialEmp.name}: يوم ${res.dayOfMonth} كل شهر (${res.daysCount} يوم)`
+            );
+          }
+          setMonthlyDialTarget(null);
         }}
       />
     </div>

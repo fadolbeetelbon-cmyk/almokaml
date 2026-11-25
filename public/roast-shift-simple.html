@@ -1,0 +1,1811 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Roast Shift — الدليل التفاعلي والمحاكاة البسيطة</title>
+  <meta name="description" content="دليل تفاعلي ومحاكاة حية لنظام Roast Shift لتنظيم ورديات الغد بين الفروع والأدمن بواجهة واتساب بسيطة." />
+  <style>
+    /* =========================================================
+       Roast Shift — الدليل التفاعلي والمحاكاة السريعة للهاتف
+       ========================================================= */
+    :root {
+      --wa-green: #008069;
+      --wa-green-dark: #016b58;
+      --wa-accent: #25d366;
+      --wa-bg: #efeae2;
+      --wa-bubble-out: #d9fdd3;
+      --wa-bubble-in: #ffffff;
+      --text-main: #111b21;
+      --text-muted: #54656f;
+      --border: #d1d7db;
+      --border-soft: #e9edef;
+      --red-bg: #fff1f2;
+      --red-border: #fda4af;
+      --red-text: #9f1239;
+      --amber-bg: #fffbeb;
+      --amber-border: #fcd34d;
+      --amber-text: #92400e;
+      --green-bg: #e7fce3;
+      --green-border: #86efac;
+      --green-text: #006e5a;
+      --blue-tick: #53bdeb;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Cairo", "Segoe UI", Tahoma, Arial, sans-serif;
+      background: var(--wa-bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 100dvh;
+    }
+
+    button, input, select {
+      font-family: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background: none;
+      transition: background-color 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* خلفية الواتساب الأصلية */
+    .wa-wallpaper {
+      background-color: #efeae2;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='none' stroke='%239aa5ac' stroke-width='1.2' opacity='0.14'%3E%3Crect x='22' y='22' width='22' height='18' rx='4'/%3E%3Cpath d='M28 18v8M38 18v8M22 29h22'/%3E%3Ccircle cx='110' cy='32' r='10'/%3E%3Cpath d='M110 26v6l4 3'/%3E%3Cpath d='M168 24h16v14a8 8 0 0 1-16 0V24zM184 27h4a3 3 0 0 1 0 6h-4'/%3E%3Cpath d='M24 98h18l-2 14H26l-2-14z'/%3E%3Ccircle cx='106' cy='102' r='8'/%3E%3Cpath d='M172 96l14 7-14 7 3-7-3-7z'/%3E%3Crect x='24' y='168' width='22' height='16' rx='3'/%3E%3Cpath d='M104 176l5 5 9-10'/%3E%3Cpath d='M174 166a8 8 0 0 1 11 11 7 7 0 0 1-11-11z'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: 220px 220px;
+    }
+
+    /* الحاوية العامة */
+    .app-shell {
+      max-width: 920px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* الهيدر العلوي */
+    .top-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: var(--wa-green);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand-circle {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .brand-title { font-size: 15px; font-weight: 800; white-space: nowrap; }
+    .brand-sub { font-size: 11px; color: rgba(255,255,255,0.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .pill-btn {
+      min-height: 36px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .pill-btn.ghost { background: rgba(255,255,255,0.16); color: #fff; }
+    .pill-btn.ghost:hover { background: rgba(255,255,255,0.26); }
+    .pill-btn.bright { background: var(--wa-accent); color: var(--text-main); }
+    .pill-btn.bright:hover { background: #1fc45b; }
+
+    .badge-count {
+      background: var(--wa-accent);
+      color: var(--text-main);
+      border-radius: 999px;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    /* تبويبات الهاتف */
+    .mobile-tabs {
+      display: grid;
+      border-top: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .mobile-tabs.cols-2 { grid-template-columns: 1fr 1fr; }
+    .mobile-tabs.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+    .mobile-tab {
+      padding: 10px 6px;
+      color: rgba(255,255,255,0.75);
+      font-size: 12px;
+      font-weight: 800;
+      border-bottom: 3px solid transparent;
+    }
+
+    .mobile-tab.active {
+      color: #fff;
+      border-bottom-color: var(--wa-accent);
+    }
+
+    /* البطاقات */
+    .card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(17,27,33,0.05);
+    }
+
+    .main-pad {
+      padding: 12px;
+      flex: 1;
+    }
+
+    /* أزرار عامة */
+    .btn {
+      min-height: 44px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary { background: var(--wa-green); color: #fff; }
+    .btn-primary:hover { background: var(--wa-green-dark); }
+    .btn-accent { background: var(--wa-accent); color: var(--text-main); }
+    .btn-outline { background: #fff; color: var(--text-main); border: 1px solid var(--border); }
+    .btn-outline:hover { background: #f0f2f5; }
+    .btn-soft-green { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-border); }
+    .btn-soft-red { background: var(--red-bg); color: var(--red-text); border: 1px solid var(--red-border); }
+
+    /* شبكات أفقية 100% للموبايل */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    /* شاشة الدليل التفاعلي */
+    .guide-wrap {
+      max-width: 680px;
+      margin: 14px auto;
+      padding: 0 10px 24px;
+    }
+
+    .guide-nav {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      background: #f0f2f5;
+      padding: 6px;
+      border-radius: 14px;
+      margin-bottom: 14px;
+    }
+
+    .guide-nav button {
+      min-height: 40px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-muted);
+      padding: 6px 4px;
+    }
+
+    .guide-nav button.active {
+      background: var(--wa-green);
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    }
+
+    .compare-box {
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 12px;
+    }
+
+    .compare-box.before {
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      color: var(--red-text);
+    }
+
+    .compare-box.after {
+      background: var(--green-bg);
+      border: 1px solid var(--green-border);
+      color: var(--green-text);
+    }
+
+    .compare-box ul {
+      padding-right: 16px;
+      margin-top: 6px;
+      display: grid;
+      gap: 4px;
+    }
+
+    /* شاشة الرموز */
+    .login-box {
+      max-width: 420px;
+      margin: 18px auto;
+      padding: 0 10px 24px;
+    }
+
+    .pin-display {
+      width: 100%;
+      border: 2px solid var(--border);
+      background: #f8fafc;
+      border-radius: 14px;
+      padding: 12px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.35em;
+      color: var(--text-main);
+      margin-bottom: 12px;
+    }
+
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      direction: ltr;
+      margin-bottom: 12px;
+    }
+
+    .keypad button {
+      min-height: 46px;
+      border-radius: 12px;
+      border: 1px solid var(--border-soft);
+      background: #f8fafc;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .keypad button:hover { background: #f0f2f5; }
+
+    /* أزرار شفتات الأدمن الكبيرة */
+    .admin-shift-btn {
+      min-height: 62px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 800;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      border: 2px solid var(--border);
+      background: #fff;
+      color: var(--text-main);
+    }
+
+    .admin-shift-btn.active {
+      background: var(--wa-green);
+      border-color: var(--wa-green);
+      color: #fff;
+    }
+
+    .admin-shift-btn small {
+      font-size: 11px;
+      font-weight: 600;
+      opacity: 0.85;
+    }
+
+    /* بطاقات الفروع بالألوان */
+    .branch-card {
+      width: 100%;
+      text-align: right;
+      border-radius: 14px;
+      padding: 12px;
+      border: 1.5px solid var(--border);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .branch-card.shortage { background: var(--red-bg); border-color: var(--red-border); }
+    .branch-card.surplus { background: var(--amber-bg); border-color: var(--amber-border); }
+    .branch-card.stable { background: var(--green-bg); border-color: var(--green-border); }
+    .branch-card.waiting { background: #f8fafc; border-color: var(--border); }
+
+    .status-tag {
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .status-tag.shortage { background: #e11d48; color: #fff; }
+    .status-tag.surplus { background: #f59e0b; color: #111b21; }
+    .status-tag.stable { background: var(--wa-green); color: #fff; }
+    .status-tag.waiting { background: #e2e8f0; color: #475569; }
+
+    /* فقاعات الواتساب */
+    .chat-feed {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 430px;
+      overflow-y: auto;
+    }
+
+    .bubble {
+      max-width: 92%;
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-size: 13px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+      position: relative;
+      white-space: pre-line;
+    }
+
+    .bubble.out {
+      align-self: flex-start;
+      background: var(--wa-bubble-out);
+      border: 1px solid #b6ecc0;
+    }
+
+    .bubble.in {
+      align-self: flex-end;
+      background: #fff;
+      border: 1px solid var(--border-soft);
+    }
+
+    .bubble.edited-border {
+      border: 2px solid #f59e0b !important;
+    }
+
+    .bubble.superseded {
+      opacity: 0.7;
+    }
+
+    .edit-alert-box {
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      border-radius: 10px;
+      padding: 7px 10px;
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .bubble-meta {
+      margin-top: 6px;
+      padding-top: 5px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* لوحة اليوم الأفقية على الهاتف */
+    .today-card {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 10px;
+    }
+
+    .day-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+    }
+
+    .day-chip {
+      min-width: 78px;
+      padding: 7px 8px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .day-chip.active {
+      background: var(--wa-green);
+      border-color: var(--wa-green);
+      color: #fff;
+    }
+
+    /* الساعة الدائرية */
+    .dial-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+    }
+
+    .dial-circle {
+      position: relative;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: #f8fafc;
+      border: 2px solid var(--border);
+    }
+
+    .dial-center {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      transform: translate(-50%, -50%);
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: var(--green-bg);
+      border: 2px solid var(--green-border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--green-text);
+      padding: 6px;
+    }
+
+    .dial-node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      min-width: 34px;
+      height: 34px;
+      padding: 0 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .dial-node.active {
+      background: var(--wa-green);
+      border-color: var(--wa-green);
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(0,128,105,0.35);
+    }
+
+    /* النوافذ المنبثقة */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(0,0,0,0.52);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 480px;
+      max-height: 88dvh;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      padding: 16px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.22);
+    }
+
+    .input-field {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 90;
+      background: #111b21;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    }
+
+    .tour-bar {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 80;
+      max-width: 460px;
+      max-height: 42dvh;
+      overflow-y: auto;
+      margin: 0 auto;
+      background: #202c33;
+      color: #e9edef;
+      border-radius: 16px;
+      border: 1px solid #2a3942;
+      padding: 14px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+
+    .tour-bar.top-pos {
+      top: 12px;
+      bottom: auto;
+    }
+
+    .tour-highlight {
+      outline: 3px solid #25d366 !important;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 6px rgba(37, 211, 102, 0.28) !important;
+      position: relative;
+      z-index: 75;
+      filter: none !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+
+    body.tour-spotlight-mode button:not(.tour-highlight):not(.tour-highlight *):not(.tour-bar):not(.tour-bar *),
+    body.tour-spotlight-mode input:not(.tour-highlight):not(.tour-bar *),
+    body.tour-spotlight-mode select:not(.tour-highlight):not(.tour-bar *) {
+      filter: blur(2.2px);
+      opacity: 0.34;
+      pointer-events: none !important;
+      transition: filter 0.2s ease, opacity 0.2s ease;
+    }
+
+    .flash {
+      animation: flashBg 2.2s ease-out;
+    }
+
+    @keyframes flashBg {
+      0% { box-shadow: 0 0 0 4px #25d366; }
+      100% { box-shadow: none; }
+    }
+  </style>
+</head>
+<body class="wa-wallpaper">
+  <div id="app"></div>
+
+  <script>
+    // =========================================================================
+    // 1. البيانات المبدئية البسيطة (يمكن تعديلها بسهولة بدون أي تعقيد برمجي)
+    // =========================================================================
+    var DAYS_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    var SHIFTS_AR = { morning: 'الوردية الصباحية', evening: 'الوردية المسائية', between: 'بتوين' };
+    var SHIFT_TIMES = {
+      morning: '07:00 ص - 05:00 م',
+      evening: '04:00 م - 02:00 ص',
+      between: '12:00 م - 10:00 م'
+    };
+
+    function isoDateOffset(days) {
+      var d = new Date();
+      d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function fmtDateAr(iso) {
+      var d = new Date(iso + 'T12:00:00');
+      var dayName = DAYS_AR[d.getDay()];
+      return dayName + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
+    }
+
+    function timeNowAr() {
+      return new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    var TOMORROW_ISO = isoDateOffset(1);
+
+    function createInitialState() {
+      return {
+        adminPin: '0000',
+        branches: [
+          {
+            id: 'b1', name: 'فرع الصنادلي', pin: '12341', required: { morning: 3, evening: 3 },
+            emps: [
+              { id: 'e1', name: 'أحمد علي', shift: 'morning', weeklyOff: 5, monthlyDay: 5, monthlyDays: 2 },
+              { id: 'e2', name: 'محمد سعيد', shift: 'morning', weeklyOff: 6, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e3', name: 'يوسف حسن', shift: 'between', weeklyOff: 2, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e4', name: 'كريم عادل', shift: 'morning', weeklyOff: 0, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e5', name: 'طارق محمود', shift: 'evening', weeklyOff: 4, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e6', name: 'سامح نبيل', shift: 'evening', weeklyOff: 1, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e7', name: 'عمرو فتحي', shift: 'evening', weeklyOff: 3, monthlyDay: null, monthlyDays: 0 }
+            ]
+          },
+          {
+            id: 'b2', name: 'فرع مراد', pin: '12342', required: { morning: 2, evening: 2 },
+            emps: [
+              { id: 'e21', name: 'طارق خالد', shift: 'morning', weeklyOff: 5, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e22', name: 'هاني إبراهيم', shift: 'morning', weeklyOff: 1, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e23', name: 'مصطفى جمال', shift: 'morning', weeklyOff: 3, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e24', name: 'حسام الدين', shift: 'evening', weeklyOff: 2, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e25', name: 'وائل سمير', shift: 'evening', weeklyOff: 6, monthlyDay: null, monthlyDays: 0 }
+            ]
+          },
+          {
+            id: 'b3', name: 'فرع ميدان لبنان', pin: '12343', required: { morning: 3, evening: 3 },
+            emps: [
+              { id: 'e31', name: 'وليد أشرف', shift: 'morning', weeklyOff: 5, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e32', name: 'باسم صلاح', shift: 'morning', weeklyOff: 2, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e33', name: 'رامي كمال', shift: 'evening', weeklyOff: 4, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e34', name: 'أيمن شوقي', shift: 'evening', weeklyOff: 6, monthlyDay: null, monthlyDays: 0 }
+            ]
+          },
+          {
+            id: 'b4', name: 'فرع حسن محمد', pin: '12344', required: { morning: 2, evening: 2 },
+            emps: [
+              { id: 'e41', name: 'سيد رجب', shift: 'morning', weeklyOff: 5, monthlyDay: null, monthlyDays: 0 },
+              { id: 'e42', name: 'إسلام فوزي', shift: 'evening', weeklyOff: 1, monthlyDay: null, monthlyDays: 0 }
+            ]
+          }
+        ],
+        // توفر الغد المرسل مسبقاً للتوضيح
+        submissions: {
+          'b2|morning': {
+            branchId: 'b2', shift: 'morning', actual: 3, required: 2, time: '08:15 م',
+            rows: [
+              { empId: 'e21', name: 'طارق خالد', available: true, reason: '' },
+              { empId: 'e22', name: 'هاني إبراهيم', available: true, reason: '' },
+              { empId: 'e23', name: 'مصطفى جمال', available: true, reason: '' }
+            ]
+          },
+          'b3|morning': {
+            branchId: 'b3', shift: 'morning', actual: 1, required: 3, time: '08:20 م',
+            rows: [
+              { empId: 'e31', name: 'وليد أشرف', available: true, reason: '' },
+              { empId: 'e32', name: 'باسم صلاح', available: false, reason: 'إجازة مرضية' }
+            ]
+          }
+        },
+        messages: [
+          {
+            id: 'm1', branchId: 'b2', sender: 'branch', shift: 'morning', time: '08:15 م',
+            readByAdmin: false, isEdited: false, editDiff: '',
+            text: 'توفر الوردية الصباحية — فرع مراد\nغداً ' + fmtDateAr(TOMORROW_ISO) + '\nالحضور (3):\n- طارق خالد\n- هاني إبراهيم\n- مصطفى جمال'
+          },
+          {
+            id: 'm2', branchId: 'b3', sender: 'branch', shift: 'morning', time: '08:20 م',
+            readByAdmin: false, isEdited: false, editDiff: '',
+            text: 'توفر الوردية الصباحية — فرع ميدان لبنان\nغداً ' + fmtDateAr(TOMORROW_ISO) + '\nالحضور (1):\n- وليد أشرف\nغير المتاحين (1):\n- باسم صلاح (إجازة مرضية)'
+          }
+        ],
+        notifications: [
+          { id: 'n1', role: 'central', branchId: 'b2', shift: 'morning', msgId: 'm1', title: 'فرع مراد', text: 'أرسل توفر الوردية الصباحية (فائض +1)', time: '08:15 م', read: false },
+          { id: 'n2', role: 'central', branchId: 'b3', shift: 'morning', msgId: 'm2', title: 'فرع ميدان لبنان', text: 'أرسل توفر الوردية الصباحية (عجز 2)', time: '08:20 م', read: false }
+        ]
+      };
+    }
+
+    var state = createInitialState();
+
+    // حالة الجلسة والواجهة الحالية
+    var ui = {
+      screen: 'guide', // 'guide' | 'login' | 'branch' | 'admin'
+      guideTab: 'idea', // 'idea' | 'branch' | 'admin' | 'live'
+      pinInput: '',
+      loginError: '',
+      role: null,
+      branchId: 'b1',
+      branchTab: 'chat', // 'chat' | 'today' | 'team'
+      branchShift: 'morning',
+      todayOffset: 1, // 1 = غداً
+      adminShift: 'morning',
+      adminModalBranchId: null, // فتح شات فرع عند الأدمن
+      showCheckSheet: false,
+      draftRows: [],
+      showNotifModal: false,
+      showBranchMenuModal: false,
+      showAddEmpModal: false,
+      showReadOnlyPlanModal: null, // branchId عند الأدمن
+      showTransferModal: null, // { fromBranchId }
+      dialMode: null, // 'weekly' | 'monthlyDay' | 'monthlyDays'
+      newEmp: { name: '', shift: 'morning', weeklyOff: 5, monthlyDay: null, monthlyDays: 2 },
+      focusMsgId: null,
+      toast: '',
+      tourStep: -1
+    };
+
+    function showToast(msg) {
+      ui.toast = msg;
+      render();
+      setTimeout(function() {
+        if (ui.toast === msg) {
+          ui.toast = '';
+          render();
+        }
+      }, 2600);
+    }
+
+    // حساب حالة الموظف في يوم معين
+    function getEmpPlanForDate(emp, iso) {
+      var d = new Date(iso + 'T12:00:00');
+      var dow = d.getDay();
+      var dom = d.getDate();
+      if (emp.monthlyDay && emp.monthlyDays > 0) {
+        if (dom >= emp.monthlyDay && dom < emp.monthlyDay + emp.monthlyDays) {
+          return { off: true, reason: 'إجازة شهرية (يوم ' + emp.monthlyDay + ')' };
+        }
+      }
+      if (emp.weeklyOff === dow) {
+        return { off: true, reason: 'إجازة أسبوعية (' + DAYS_AR[dow] + ')' };
+      }
+      return { off: false, reason: '' };
+    }
+
+    // بناء كشف الغد التلقائي لفرع ووردية
+    function buildPlannedRows(branchId, shift) {
+      var br = state.branches.find(function(b) { return b.id === branchId; });
+      if (!br) return [];
+      return br.emps.filter(function(e) {
+        if (shift === 'morning') return e.shift === 'morning' || e.shift === 'between';
+        return e.shift === 'evening' || e.shift === 'between';
+      }).map(function(e) {
+        var plan = getEmpPlanForDate(e, TOMORROW_ISO);
+        return {
+          empId: e.id,
+          name: e.name + (e.shift === 'between' ? ' (بتوين)' : ''),
+          available: !plan.off,
+          reason: plan.reason || ''
+        };
+      });
+    }
+
+    // تصنيف الفرع بالألوان للأدمن فقط (لا يظهر للفرع)
+    function getBranchColorStatus(branchId, shift) {
+      var br = state.branches.find(function(b) { return b.id === branchId; });
+      var req = br.required[shift];
+      var sub = state.submissions[branchId + '|' + shift];
+      if (!sub) return { code: 'waiting', label: 'انتظار', counts: '-- / ' + req };
+      var diff = sub.actual - req;
+      if (diff < 0) return { code: 'shortage', label: 'عجز ' + Math.abs(diff), counts: sub.actual + ' / ' + req };
+      if (diff > 0) return { code: 'surplus', label: 'فائض +' + diff, counts: sub.actual + ' / ' + req };
+      return { code: 'stable', label: 'مستقر', counts: sub.actual + ' / ' + req };
+    }
+
+    // =========================================================================
+    // 2. الدليل التفاعلي (الواجهة الافتراضية الأولى)
+    // =========================================================================
+    function renderGuide() {
+      var tab = ui.guideTab;
+      var bodyHtml = '';
+
+      if (tab === 'idea') {
+        bodyHtml =
+          '<h2 style="font-size:18px;font-weight:800;margin-bottom:6px;">فكرة Roast Shift في 10 ثوانٍ</h2>' +
+          '<p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">دليل واضح وتجربة حية للفكرة، لاستبدال تشتت الرسائل والعد اليدوي بشاشة واحدة بسيطة.</p>' +
+          '<div class="grid-2" style="margin-bottom:14px;">' +
+            '<div class="compare-box before"><strong>قبل النظام (الوضع الحالي)</strong><ul>' +
+              '<li>8 محادثات واتساب متفرقة</li>' +
+              '<li>عد يدوي ومراجعة مرهقة</li>' +
+              '<li>صعوبة رصد التعديلات وسط الكلام</li>' +
+              '<li>مفاجآت عجز قبل الوردية</li>' +
+            '</ul></div>' +
+            '<div class="compare-box after"><strong>بعد نظام Roast Shift</strong><ul>' +
+              '<li>ألوان واضحة: أحمر / أصفر / أخضر</li>' +
+              '<li>إرسال حضور الغد بلمسة واحدة</li>' +
+              '<li>تنبيه فوري عند أي تعديل لاحق</li>' +
+              '<li>نقل موظف بضغطة زر</li>' +
+            '</ul></div>' +
+          '</div>' +
+          '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:12px;font-size:12px;">' +
+            '<strong>توزيع الصلاحيات:</strong> الفرع يرسل فقط من سيحضر ومن في إجازة دون معرفة وجود عجز أو زيادة، والأدمن وحده يرى الألوان ويتخذ قرار النقل.' +
+          '</div>';
+      } else if (tab === 'branch') {
+        bodyHtml =
+          '<h2 style="font-size:18px;font-weight:800;margin-bottom:6px;">شاشة الفرع — مصممة للهاتف 100%</h2>' +
+          '<p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">واضحة وبسيطة جداً: نفس إحساس الواتساب دون قوائم معقدة، مع تحديث الأيام والتواريخ أوتوماتيك كل يوم.</p>' +
+          '<div class="grid-2" style="margin-bottom:10px;">' +
+            '<div class="today-card">' +
+              '<div style="font-size:12px;font-weight:800;color:var(--wa-green);">صباحي (أفقي)</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);">07:00 ص - 05:00 م</div>' +
+              '<div style="font-size:11px;font-weight:800;margin-top:4px;">3 + 1 بتوين</div>' +
+            '</div>' +
+            '<div class="today-card">' +
+              '<div style="font-size:12px;font-weight:800;color:var(--wa-green);">مسائي (أفقي)</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);">04:00 م - 02:00 ص</div>' +
+              '<div style="font-size:11px;font-weight:800;margin-top:4px;">3 + 1 بتوين</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid;gap:8px;font-size:12px;">' +
+            '<div style="background:var(--green-bg);border:1px solid var(--green-border);padding:10px;border-radius:12px;"><strong>1. لوحة اليوم أفقية:</strong> الصباحي والمسائي جنباً إلى جنب على الهاتف، والأيام والتواريخ بتتغير أوتوماتيك كل يوم حسب التقويم.</div>' +
+            '<div style="background:#fff;border:1px solid var(--border);padding:10px;border-radius:12px;"><strong>2. الساعة الدائرية للإجازات:</strong> عند إضافة موظف تُختار الراحة الأسبوعية أو الإجازة الشهرية (مثل يوم 5 كل شهر لمدة 2 يوم) عبر ساعة دائرية واضحة.</div>' +
+            '<div style="background:#fff;border:1px solid var(--border);padding:10px;border-radius:12px;"><strong>3. وصول سريع من المحادثة:</strong> خطة الأسبوع، طاقم الفرع، إضافة موظف، والإشعارات متاحة مباشرة أو بالضغط على اسم «الأدمن · الفرع».</div>' +
+          '</div>';
+      } else if (tab === 'admin') {
+        bodyHtml =
+          '<h2 style="font-size:18px;font-weight:800;margin-bottom:6px;">شاشة الأدمن</h2>' +
+          '<p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">شاشة سريعة للمراجعة المباشرة بالألوان واتخاذ قرار النقل في لحظتها.</p>' +
+          '<div style="display:grid;gap:8px;margin-bottom:10px;">' +
+            '<div class="branch-card shortage"><div><strong style="font-size:13px;">فرع ميدان لبنان</strong><div style="font-size:11px;color:var(--red-text);">ناقص 2 عن المطلوب</div></div><span class="status-tag shortage">عجز 2</span></div>' +
+            '<div class="branch-card surplus"><div><strong style="font-size:13px;">فرع مراد</strong><div style="font-size:11px;color:var(--amber-text);">يمكن نقل فرد زيادة منه</div></div><span class="status-tag surplus">فائض +1</span></div>' +
+            '<div class="branch-card stable"><div><strong style="font-size:13px;">فرع الصنادلي</strong><div style="font-size:11px;color:var(--green-text);">العدد مضبوط ومستقر</div></div><span class="status-tag stable">مستقر</span></div>' +
+          '</div>' +
+          '<div class="edit-alert-box">ميزة كشف التعديل: إذا عدّل الفرع اسماً بعد الإرسال في نفس اليوم، يظهر التنبيه باسم الموظف المتغير وتُخفف النسخة السابقة تلقائياً.</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);">كما ينقلك أي إشعار تضغط عليه مباشرة إلى المحادثة والرسالة نفسها، مع إمكانية تأكيد الاطلاع أو نقل موظف أو مراجعة خطة الفرع للقراءة فقط.</div>';
+      } else {
+        bodyHtml =
+          '<h2 style="font-size:18px;font-weight:800;margin-bottom:6px;">التجربة المباشرة خطوة بخطوة</h2>' +
+          '<p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">تأخذك الجولة التعليمية عبر كل شاشات النظام بالتسلسل التلقائي من الدخول إلى إرسال التوفر ومراجعة الأدمن.</p>' +
+          '<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:12px;padding:12px;font-size:12px;margin-bottom:12px;">' +
+            '<strong>ملاحظات مهمة أثناء التجربة:</strong>' +
+            '<ul style="padding-right:18px;margin-top:6px;display:grid;gap:4px;">' +
+              '<li>الأيام والتواريخ بتتغير أوتوماتيك كل يوم حسب التقويم.</li>' +
+              '<li>أمامك 4 خيارات جاهزة دائماً: خطة الأسبوع، طاقم الفرع، إضافة موظف، والإشعارات.</li>' +
+              '<li>الضغط على أيقونة أو اسم «الأدمن · فرع الصنادلي» يفتح نفس الخيارات الأربعة مباشرة.</li>' +
+            '</ul>' +
+          '</div>' +
+          '<div style="display:grid;gap:8px;">' +
+            '<button class="btn btn-accent" onclick="startTour()">ابدأ الجولة التعليمية خطوة بخطوة</button>' +
+            '<button class="btn btn-primary" onclick="quickLogin(\'0000\')">جرّب شاشة الأدمن فوراً (0000)</button>' +
+            '<button class="btn btn-soft-green" onclick="quickLogin(\'12341\')">جرّب شاشة فرع الصنادلي (12341)</button>' +
+          '</div>';
+      }
+
+      return (
+        '<div class="guide-wrap">' +
+          '<div class="card">' +
+            '<div style="background:var(--wa-green);color:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+              '<div>' +
+                '<div style="font-size:16px;font-weight:800;">الدليل التفاعلي — Roast Shift</div>' +
+                '<div style="font-size:12px;opacity:0.9;">شرح عملي للفكرة وتجربة حية للهاتف</div>' +
+              '</div>' +
+              '<div style="display:flex;gap:6px;">' +
+                '<button class="pill-btn bright" onclick="startTour()">الجولة التعليمية</button>' +
+                '<button class="pill-btn ghost" onclick="goScreen(\'login\')">شاشة الرموز</button>' +
+              '</div>' +
+            '</div>' +
+            '<div style="padding:14px;">' +
+              '<div class="guide-nav">' +
+                '<button class="' + (tab==='idea'?'active':'') + '" onclick="setGuideTab(\'idea\')">1. الفكرة</button>' +
+                '<button class="' + (tab==='branch'?'active':'') + '" onclick="setGuideTab(\'branch\')">2. حساب الفرع</button>' +
+                '<button class="' + (tab==='admin'?'active':'') + '" onclick="setGuideTab(\'admin\')">3. الأدمن</button>' +
+                '<button class="' + (tab==='live'?'active':'') + '" onclick="setGuideTab(\'live\')">4. التجربة</button>' +
+              '</div>' +
+              bodyHtml +
+              '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:1px solid var(--border-soft);">' +
+                '<button class="btn btn-accent" onclick="startTour()">بدء الجولة التعليمية</button>' +
+                '<button class="btn btn-primary" onclick="nextGuideTab()">' + (tab==='live' ? 'افتح التجربة الحية' : 'التالي في الدليل') + '</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    // =========================================================================
+    // 3. شاشة الدخول بالرموز السرية (0000 للأدمن و 12341..12344 للفروع)
+    // =========================================================================
+    function renderLogin() {
+      var keys = ['1','2','3','4','5','6','7','8','9','مسح','0','حذف'];
+      var keypadHtml = keys.map(function(k) {
+        return '<button type="button" onclick="tapKey(\'' + k + '\')">' + k + '</button>';
+      }).join('');
+
+      var branchesBtns = state.branches.map(function(b) {
+        var btnId = b.id === 'b1' ? ' id="tourQuickBranch_b1"' : '';
+        return '<button' + btnId + ' type="button" class="btn btn-outline" style="min-height:38px;font-size:12px;border-radius:12px;" onclick="quickLogin(\'' + b.pin + '\')">' +
+          b.name + ' <span class="mono" style="color:var(--text-muted)">(' + b.pin + ')</span></button>';
+      }).join('');
+
+      return (
+        '<div class="login-box">' +
+          '<div class="card">' +
+            '<div style="background:var(--wa-green);color:#fff;padding:16px 18px;">' +
+              '<div style="font-size:17px;font-weight:800;">Roast Shift · واتساب الشفتات</div>' +
+              '<div style="font-size:12px;opacity:0.9;">أدخل رمز الأدمن (0000) أو رمز فرعك</div>' +
+            '</div>' +
+            '<div style="padding:16px;">' +
+              '<div class="pin-display mono">' + (ui.pinInput ? ui.pinInput.replace(/./g, '•') : '••••') + '</div>' +
+              '<div class="keypad">' + keypadHtml + '</div>' +
+              (ui.loginError ? '<div style="color:var(--red-text);font-size:12px;font-weight:800;text-align:center;margin-bottom:8px;">' + ui.loginError + '</div>' : '') +
+              '<button type="button" class="btn btn-primary" style="width:100%;margin-bottom:14px;" onclick="submitPin()">فتح المحادثات</button>' +
+              '<div style="border-top:1px solid var(--border-soft);padding-top:12px;display:grid;gap:8px;">' +
+                '<div class="grid-2">' +
+                  '<button type="button" class="btn btn-accent" onclick="startTour()">بدء الجولة التعليمية</button>' +
+                  '<button type="button" class="btn btn-soft-green" onclick="goScreen(\'guide\')">الدليل التعريفي</button>' +
+                '</div>' +
+                '<button type="button" class="btn btn-primary" onclick="quickLogin(\'0000\')">دخول سريع: الأدمن (0000)</button>' +
+                '<div class="grid-2">' + branchesBtns + '</div>' +
+                '<button type="button" class="btn btn-outline" style="min-height:36px;font-size:11px;" onclick="resetDemo()">إعادة تصفير التجربة</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    // =========================================================================
+    // 4. واجهة الفرع (الشات + لوحة اليوم الأفقية + الطاقم والساعة الدائرية)
+    // =========================================================================
+    function renderBranchView() {
+      var br = state.branches.find(function(b) { return b.id === ui.branchId; });
+      if (ui.branchTab === 'today') {
+        var daysStrip = '';
+        for (var i = 0; i < 7; i++) {
+          var iso = isoDateOffset(i);
+          var lbl = i === 0 ? 'اليوم' : i === 1 ? 'غداً' : fmtDateAr(iso);
+          daysStrip += '<button class="day-chip ' + (ui.todayOffset === i ? 'active' : '') + '" onclick="setTodayOffset(' + i + ')">' + lbl + '</button>';
+        }
+        var targetIso = isoDateOffset(ui.todayOffset);
+        var mList = br.emps.filter(function(e) { return e.shift === 'morning' || e.shift === 'between'; });
+        var eList = br.emps.filter(function(e) { return e.shift === 'evening' || e.shift === 'between'; });
+
+        function renderShiftList(list) {
+          return list.map(function(e) {
+            var plan = getEmpPlanForDate(e, targetIso);
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border-soft);font-size:11px;">' +
+              '<span><strong>' + e.name + '</strong>' + (e.shift === 'between' ? ' (بتوين)' : '') + '</span>' +
+              '<span style="font-weight:800;color:' + (plan.off ? 'var(--red-text)' : 'var(--green-text)') + ';">' + (plan.off ? 'إجازة' : 'حضور') + '</span>' +
+            '</div>';
+          }).join('');
+        }
+
+        return (
+          '<div class="main-pad">' +
+            '<div class="card" style="padding:12px;">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+                '<div><strong style="font-size:15px;">لوحة اليوم الأفقية</strong><div style="font-size:11px;color:var(--text-muted);">' + fmtDateAr(targetIso) + ' · متفصلة للموبايل</div></div>' +
+                '<button class="btn btn-soft-green" style="min-height:36px;padding:6px 12px;font-size:11px;" onclick="setBranchTab(\'chat\')">العودة للشات</button>' +
+              '</div>' +
+              '<div class="day-strip">' + daysStrip + '</div>' +
+              '<div style="text-align:center;font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:8px;">الأيام والتواريخ تتغير أوتوماتيك كل يوم حسب التقويم</div>' +
+              '<div class="grid-2">' +
+                '<div class="today-card">' +
+                  '<div style="font-size:13px;font-weight:800;color:var(--wa-green);">صباحي</div>' +
+                  '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' + SHIFT_TIMES.morning + '</div>' +
+                  renderShiftList(mList) +
+                '</div>' +
+                '<div class="today-card">' +
+                  '<div style="font-size:13px;font-weight:800;color:var(--wa-green);">مسائي</div>' +
+                  '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' + SHIFT_TIMES.evening + '</div>' +
+                  renderShiftList(eList) +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>'
+        );
+      }
+
+      if (ui.branchTab === 'team') {
+        var empsHtml = br.emps.map(function(e) {
+          var offTxt = e.weeklyOff !== null ? ('راحة أسبوعية: ' + DAYS_AR[e.weeklyOff]) : 'بدون راحة أسبوعية';
+          var mTxt = e.monthlyDay ? (' · شهرية: يوم ' + e.monthlyDay + ' (' + e.monthlyDays + ' يوم)') : '';
+          return (
+            '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border-soft);">' +
+              '<div>' +
+                '<div style="font-size:13px;font-weight:800;">' + e.name + '</div>' +
+                '<div style="font-size:11px;color:var(--text-muted);">' + SHIFTS_AR[e.shift] + ' · ' + offTxt + mTxt + '</div>' +
+              '</div>' +
+              '<button class="btn btn-outline" style="min-height:34px;padding:4px 10px;font-size:11px;" onclick="removeEmp(\'' + e.id + '\')">حذف</button>' +
+            '</div>'
+          );
+        }).join('');
+
+        return (
+          '<div class="main-pad">' +
+            '<div class="card">' +
+              '<div style="padding:12px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;">' +
+                '<div><strong style="font-size:15px;">الموظفون والإجازات</strong><div style="font-size:11px;color:var(--text-muted);">اختيار الإجازة الأسبوعية والشهرية بالساعة الدائرية</div></div>' +
+                '<button class="btn btn-primary" style="min-height:38px;font-size:12px;" onclick="openAddEmp()">+ إضافة موظف</button>' +
+              '</div>' +
+              empsHtml +
+            '</div>' +
+          '</div>'
+        );
+      }
+
+      // شاشة الشات للفرع (بدون إظهار عجز أو زيادة نهائياً)
+      var msgs = state.messages.filter(function(m) { return m.branchId === br.id; });
+      var msgsHtml = msgs.length === 0
+        ? '<div style="text-align:center;color:var(--text-muted);padding:32px 12px;font-size:12px;">لا توجد رسائل بعد. اضغط على زر الصباحي أو المسائي بالأسفل لإرسال توفر الغد.</div>'
+        : msgs.map(function(m) {
+            var cls = m.sender === 'branch' ? 'out' : 'in';
+            var ticks = m.sender === 'branch'
+              ? '<span style="display:inline-flex;align-items:center;gap:4px;font-weight:800;color:' + (m.readByAdmin ? 'var(--blue-tick)' : 'var(--text-muted)') + ';"><svg viewBox="0 0 16 11" width="14" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6l3 3 6-7"/><path d="M6 6l3 3 6-7"/></svg>' + (m.readByAdmin ? 'تم الاطلاع' : 'أُرسلت') + '</span>'
+              : '<span>من الأدمن</span>';
+            return (
+              '<div class="bubble ' + cls + (m.isEdited ? ' edited-border' : '') + (ui.focusMsgId === m.id ? ' flash' : '') + '">' +
+                (m.isEdited ? '<div class="edit-alert-box">تعديل مرسل: ' + m.editDiff + '</div>' : '') +
+                '<div>' + m.text + '</div>' +
+                '<div class="bubble-meta"><span class="mono">' + m.time + '</span>' + ticks + '</div>' +
+              '</div>'
+            );
+          }).join('');
+
+      var hasMorning = !!state.submissions[br.id + '|morning'];
+      var hasEvening = !!state.submissions[br.id + '|evening'];
+
+      return (
+        '<div class="main-pad">' +
+          '<div class="card">' +
+            '<div style="background:#f0f2f5;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+              '<button type="button" onclick="ui.showBranchMenuModal=true;render()" style="text-align:right;min-width:0;flex:1;">' +
+                '<strong style="font-size:14px;color:var(--text-main);">الأدمن · ' + br.name + ' ▾</strong>' +
+                '<div style="font-size:11px;color:var(--text-muted);">اضغط هنا أو بالأسفل للوصول لخطة الأسبوع والطاقم وإضافة موظف</div>' +
+              '</button>' +
+              '<button class="btn btn-outline" style="min-height:34px;padding:4px 10px;font-size:11px;" onclick="setBranchTab(\'today\')">خطة الأسبوع</button>' +
+            '</div>' +
+            '<div class="chat-feed wa-wallpaper">' + msgsHtml + '</div>' +
+            '<div style="padding:10px;background:#f0f2f5;border-top:1px solid var(--border);display:grid;gap:8px;">' +
+              '<div class="grid-2">' +
+                '<button id="btnSendMorning" class="btn ' + (hasMorning ? 'btn-soft-green' : 'btn-primary') + '" onclick="openCheckSheet(\'morning\')">' + (hasMorning ? 'تعديل الصباحي' : 'إرسال توفر الصباحي') + '</button>' +
+                '<button class="btn ' + (hasEvening ? 'btn-soft-green' : 'btn-primary') + '" onclick="openCheckSheet(\'evening\')">' + (hasEvening ? 'تعديل المسائي' : 'إرسال توفر المسائي') + '</button>' +
+              '</div>' +
+              '<div class="grid-2" style="grid-template-columns:repeat(4,1fr);">' +
+                '<button class="btn btn-outline" style="min-height:36px;padding:4px 6px;font-size:11px;" onclick="setBranchTab(\'today\')">خطة الأسبوع</button>' +
+                '<button class="btn btn-outline" style="min-height:36px;padding:4px 6px;font-size:11px;" onclick="setBranchTab(\'team\')">طاقم الفرع</button>' +
+                '<button class="btn btn-soft-green" style="min-height:36px;padding:4px 6px;font-size:11px;" onclick="openAddEmp()">إضافة موظف</button>' +
+                '<button class="btn btn-outline" style="min-height:36px;padding:4px 6px;font-size:11px;" onclick="ui.showNotifModal=true;render()">الإشعارات</button>' +
+              '</div>' +
+              '<div style="display:flex;gap:6px;">' +
+                '<input id="branchMsgInput" class="input-field" placeholder="اكتب رسالة لو عايز للأدمن..." />' +
+                '<button class="btn btn-primary" style="min-width:74px;" onclick="sendFreeText(\'branch\')">إرسال</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    // =========================================================================
+    // 5. واجهة الأدمن (زرا الصباحي والمسائي + ألوان + مراجعة قراءة فقط)
+    // =========================================================================
+    function renderAdminView() {
+      var summary = { shortage: 0, surplus: 0, stable: 0, waiting: 0 };
+      state.branches.forEach(function(b) {
+        var st = getBranchColorStatus(b.id, ui.adminShift);
+        summary[st.code]++;
+      });
+
+      var cardsHtml = state.branches.map(function(b) {
+        var st = getBranchColorStatus(b.id, ui.adminShift);
+        var sub = state.submissions[b.id + '|' + ui.adminShift];
+        var brMsgs = state.messages.filter(function(m) { return m.branchId === b.id; });
+        var hasEdited = brMsgs.some(function(m) { return m.isEdited && m.shift === ui.adminShift && !m.readByAdmin; });
+        var lastTxt = brMsgs.length ? brMsgs[brMsgs.length - 1].text.split('\n')[0] : 'لم يرسل توفر الغد بعد';
+        var cardId = b.id === 'b1' ? ' id="simpleAdminCard_b1"' : '';
+        return (
+          '<button' + cardId + ' class="branch-card ' + st.code + '" onclick="openAdminBranch(\'' + b.id + '\')">' +
+            '<div style="min-width:0;flex:1;">' +
+              '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+                '<strong style="font-size:14px;">' + b.name + '</strong>' +
+                (hasEdited ? '<span class="status-tag surplus">تعديل جديد</span>' : '') +
+              '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + lastTxt + '</div>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">' +
+              '<span class="mono" style="font-size:12px;font-weight:800;">' + st.counts + '</span>' +
+              '<span class="status-tag ' + st.code + '">' + st.label + '</span>' +
+              (sub && sub.time ? '<span class="mono" style="font-size:10px;color:var(--text-muted);">' + sub.time + '</span>' : '') +
+            '</div>' +
+          '</button>'
+        );
+      }).join('');
+
+      return (
+        '<div class="main-pad">' +
+          '<div class="card" style="padding:12px;margin-bottom:10px;">' +
+            '<div class="grid-2" style="margin-bottom:10px;">' +
+              '<button id="simpleAdminMorningBtn" class="admin-shift-btn ' + (ui.adminShift === 'morning' ? 'active' : '') + '" onclick="setAdminShift(\'morning\')">' +
+                '<span>صباحي</span><small>' + SHIFT_TIMES.morning + '</small>' +
+              '</button>' +
+              '<button id="simpleAdminEveningBtn" class="admin-shift-btn ' + (ui.adminShift === 'evening' ? 'active' : '') + '" onclick="setAdminShift(\'evening\')">' +
+                '<span>مسائي</span><small>' + SHIFT_TIMES.evening + '</small>' +
+              '</button>' +
+            '</div>' +
+            '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:11px;font-weight:800;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid var(--border-soft);">' +
+              '<span style="color:var(--red-text);">عجز: ' + summary.shortage + '</span>' +
+              '<span style="color:var(--amber-text);">فائض: ' + summary.surplus + '</span>' +
+              '<span style="color:var(--green-text);">مستقر: ' + summary.stable + '</span>' +
+              '<span style="color:var(--text-muted);">انتظار: ' + summary.waiting + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid;gap:8px;">' + cardsHtml + '</div>' +
+        '</div>'
+      );
+    }
+
+    // =========================================================================
+    // 6. النوافذ المنبثقة (كشف الغد، الساعة الدائرية، شات الأدمن، النقل، الإشعارات)
+    // =========================================================================
+    function renderModals() {
+      var html = '';
+
+      // أ) كشف التحضير للفرع
+      if (ui.showCheckSheet) {
+        var rowsHtml = ui.draftRows.map(function(r, idx) {
+          return (
+            '<div style="padding:9px 10px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+              '<div><strong style="font-size:13px;">' + r.name + '</strong>' +
+                (!r.available && r.reason ? '<div style="font-size:11px;color:var(--red-text);">' + r.reason + '</div>' : '') +
+              '</div>' +
+              '<button class="btn ' + (r.available ? 'btn-soft-green' : 'btn-soft-red') + '" style="min-height:36px;padding:4px 12px;font-size:11px;" onclick="toggleDraftRow(' + idx + ')">' + (r.available ? 'متاح غداً' : 'غير متاح') + '</button>' +
+            '</div>'
+          );
+        }).join('');
+
+        html +=
+          '<div class="modal-backdrop" onclick="closeModals()">' +
+            '<div class="modal-box" onclick="event.stopPropagation()">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+                '<div><strong style="font-size:15px;">تجهيز ' + SHIFTS_AR[ui.branchShift] + '</strong><div style="font-size:11px;color:var(--text-muted);">غداً ' + fmtDateAr(TOMORROW_ISO) + '</div></div>' +
+                '<button class="btn btn-soft-green" style="min-height:36px;font-size:11px;" onclick="fillByPlan()">تعبئة حسب خطة الغد</button>' +
+              '</div>' +
+              '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;">' + rowsHtml + '</div>' +
+              '<div class="grid-2">' +
+                '<button class="btn btn-outline" onclick="closeModals()">إلغاء</button>' +
+                '<button id="simpleSendAvailBtn" class="btn btn-primary" onclick="sendAvailability()">إرسال للأدمن الآن</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+      }
+
+      // ب) إضافة موظف + الساعة الدائرية للإجازات
+      if (ui.showAddEmpModal) {
+        var dialHtml = '';
+        if (ui.dialMode) {
+          var items = [];
+          var centerTxt = '';
+          if (ui.dialMode === 'weekly') {
+            centerTxt = DAYS_AR[ui.newEmp.weeklyOff];
+            items = DAYS_AR.map(function(d, idx) { return { val: idx, label: d, active: ui.newEmp.weeklyOff === idx }; });
+          } else if (ui.dialMode === 'monthlyDay') {
+            centerTxt = 'يوم ' + (ui.newEmp.monthlyDay || 5);
+            for (var d = 1; d <= 30; d += 2) {
+              items.push({ val: d, label: '' + d, active: (ui.newEmp.monthlyDay || 5) === d });
+            }
+          } else {
+            centerTxt = ui.newEmp.monthlyDays + ' يوم';
+            for (var cnt = 1; cnt <= 10; cnt++) {
+              items.push({ val: cnt, label: '' + cnt, active: ui.newEmp.monthlyDays === cnt });
+            }
+          }
+          var nodes = items.map(function(it, i) {
+            var angle = (i / items.length) * Math.PI * 2 - Math.PI / 2;
+            var x = 120 + 92 * Math.cos(angle);
+            var y = 120 + 92 * Math.sin(angle);
+            return '<button type="button" class="dial-node ' + (it.active ? 'active' : '') + '" style="left:' + x + 'px;top:' + y + 'px;" onclick="pickDialValue(' + it.val + ')">' + it.label + '</button>';
+          }).join('');
+          dialHtml =
+            '<div class="dial-wrap" style="background:#f8fafc;border:1px solid var(--border);border-radius:14px;margin-bottom:10px;padding:10px;">' +
+              '<div style="font-size:12px;font-weight:800;">' + (ui.dialMode==='weekly' ? 'اختر يوم الراحة الأسبوعية' : ui.dialMode==='monthlyDay' ? 'يأخذ إجازة يوم كم في كل شهر؟' : 'كم عدد أيام الإجازة الشهرية؟') + '</div>' +
+              '<div class="dial-circle"><div class="dial-center">' + centerTxt + '</div>' + nodes + '</div>' +
+              '<button type="button" class="btn btn-primary" style="min-height:36px;font-size:12px;" onclick="ui.dialMode=null;render()">تأكيد الاختيار</button>' +
+            '</div>';
+        }
+
+        html +=
+          '<div class="modal-backdrop" onclick="closeModals()">' +
+            '<div class="modal-box" onclick="event.stopPropagation()">' +
+              '<strong style="font-size:16px;display:block;margin-bottom:10px;">إضافة موظف جديد مع إجازاته</strong>' +
+              '<div style="display:grid;gap:8px;margin-bottom:10px;">' +
+                '<input id="newEmpName" class="input-field" placeholder="اسم الموظف الثلاثي" value="' + ui.newEmp.name + '" oninput="ui.newEmp.name=this.value" />' +
+                '<select class="input-field" onchange="ui.newEmp.shift=this.value">' +
+                  '<option value="morning" ' + (ui.newEmp.shift==='morning'?'selected':'') + '>صباحي</option>' +
+                  '<option value="evening" ' + (ui.newEmp.shift==='evening'?'selected':'') + '>مسائي</option>' +
+                  '<option value="between" ' + (ui.newEmp.shift==='between'?'selected':'') + '>بتوين</option>' +
+                '</select>' +
+                '<button type="button" class="btn btn-outline" style="justify-content:space-between;" onclick="ui.dialMode=\'weekly\';render()"><span>الراحة الأسبوعية (بالدائرية):</span><strong>' + DAYS_AR[ui.newEmp.weeklyOff] + '</strong></button>' +
+                '<div class="grid-2">' +
+                  '<button type="button" class="btn btn-outline" style="font-size:11px;" onclick="ui.dialMode=\'monthlyDay\';render()">شهرية يوم: ' + (ui.newEmp.monthlyDay || 'بدون') + '</button>' +
+                  '<button type="button" class="btn btn-outline" style="font-size:11px;" onclick="ui.dialMode=\'monthlyDays\';render()">عدد الأيام: ' + ui.newEmp.monthlyDays + '</button>' +
+                '</div>' +
+              '</div>' +
+              dialHtml +
+              '<div class="grid-2">' +
+                '<button type="button" class="btn btn-outline" onclick="closeModals()">إلغاء</button>' +
+                '<button type="button" class="btn btn-primary" onclick="saveNewEmp()">حفظ الموظف</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+      }
+
+      // ج) نافذة شات الفرع عند الأدمن
+      if (ui.adminModalBranchId) {
+        var br = state.branches.find(function(b) { return b.id === ui.adminModalBranchId; });
+        var brMsgs = state.messages.filter(function(m) { return m.branchId === br.id; });
+        var chatHtml = brMsgs.length === 0
+          ? '<div style="text-align:center;padding:24px;font-size:12px;color:var(--text-muted);">لا توجد رسائل من هذا الفرع بعد.</div>'
+          : brMsgs.map(function(m) {
+              var cls = m.sender === 'admin' ? 'out' : 'in';
+              return (
+                '<div class="bubble ' + cls + (m.isEdited ? ' edited-border' : '') + (ui.focusMsgId === m.id ? ' flash' : '') + '">' +
+                  (m.isEdited ? '<div class="edit-alert-box">تعديل جديد: ' + m.editDiff + '</div>' : '') +
+                  '<div>' + m.text + '</div>' +
+                  '<div class="bubble-meta">' +
+                    '<span class="mono">' + m.time + '</span>' +
+                    (m.sender === 'branch' ? '<button class="pill-btn ' + (m.readByAdmin ? 'ghost' : 'bright') + '" style="color:var(--text-main);border:1px solid var(--border);min-height:28px;font-size:11px;" onclick="ackMsg(\'' + m.id + '\')">' + (m.readByAdmin ? 'تم الاطلاع' : 'اضغط تم الاطلاع') + '</button>' : '') +
+                  '</div>' +
+                '</div>'
+              );
+            }).join('');
+
+        html +=
+          '<div class="modal-backdrop" onclick="closeModals()">' +
+            '<div class="modal-box" style="padding:0;overflow:hidden;" onclick="event.stopPropagation()">' +
+              '<div style="background:var(--wa-green);color:#fff;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">' +
+                '<div><strong style="font-size:15px;">' + br.name + '</strong><div style="font-size:11px;opacity:0.9;">مراجعة البيانات والرد السريع</div></div>' +
+                '<div style="display:flex;gap:6px;">' +
+                  '<button class="pill-btn ghost" onclick="ui.showReadOnlyPlanModal=\'' + br.id + '\';render()">خطة الفرع (قراءة)</button>' +
+                  '<button class="pill-btn ghost" onclick="ui.showTransferModal=\'' + br.id + '\';render()">نقل موظف</button>' +
+                  '<button class="pill-btn ghost" onclick="closeModals()">إغلاق</button>' +
+                '</div>' +
+              '</div>' +
+              '<div class="chat-feed wa-wallpaper">' + chatHtml + '</div>' +
+              '<div style="padding:10px;background:#f0f2f5;border-top:1px solid var(--border);display:flex;gap:6px;">' +
+                '<input id="adminMsgInput" class="input-field" placeholder="اكتب توجيهاً لـ ' + br.name + '..." />' +
+                '<button class="btn btn-primary" style="min-width:74px;" onclick="sendFreeText(\'admin\')">إرسال</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+      }
+
+      // د) نافذة مراجعة خطة الفرع (للقراءة فقط)
+      if (ui.showReadOnlyPlanModal) {
+        var pb = state.branches.find(function(b) { return b.id === ui.showReadOnlyPlanModal; });
+        var pRows = pb.emps.map(function(e) {
+          var plan = getEmpPlanForDate(e, TOMORROW_ISO);
+          return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:12px;">' +
+            '<span><strong>' + e.name + '</strong> · ' + SHIFTS_AR[e.shift] + '</span>' +
+            '<span style="font-weight:800;color:' + (plan.off ? 'var(--red-text)' : 'var(--green-text)') + ';">' + (plan.off ? plan.reason : 'حضور مخطط') + '</span>' +
+          '</div>';
+        }).join('');
+        html +=
+          '<div class="modal-backdrop" onclick="ui.showReadOnlyPlanModal=null;render()">' +
+            '<div class="modal-box" onclick="event.stopPropagation()">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+                '<strong style="font-size:15px;">خطة ' + pb.name + ' (للقراءة فقط)</strong>' +
+                '<button class="btn btn-outline" style="min-height:34px;font-size:11px;" onclick="ui.showReadOnlyPlanModal=null;render()">إغلاق</button>' +
+              '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">مهمة الأدمن مراجعة البيانات بدون تعديل جدول الفرع.</div>' +
+              pRows +
+            '</div>' +
+          '</div>';
+      }
+
+      // هـ) نافذة نقل موظف
+      if (ui.showTransferModal) {
+        var fb = state.branches.find(function(b) { return b.id === ui.showTransferModal; });
+        var empOpts = fb.emps.map(function(e) { return '<option value="' + e.id + '">' + e.name + '</option>'; }).join('');
+        var brOpts = state.branches.filter(function(b) { return b.id !== fb.id; }).map(function(b) { return '<option value="' + b.id + '">' + b.name + '</option>'; }).join('');
+        html +=
+          '<div class="modal-backdrop" onclick="ui.showTransferModal=null;render()">' +
+            '<div class="modal-box" onclick="event.stopPropagation()">' +
+              '<strong style="font-size:15px;display:block;margin-bottom:10px;">نقل موظف من ' + fb.name + '</strong>' +
+              '<div style="display:grid;gap:8px;margin-bottom:12px;">' +
+                '<select id="trEmpId" class="input-field">' + empOpts + '</select>' +
+                '<select id="trTargetId" class="input-field">' + brOpts + '</select>' +
+              '</div>' +
+              '<div class="grid-2">' +
+                '<button class="btn btn-outline" onclick="ui.showTransferModal=null;render()">إلغاء</button>' +
+                '<button class="btn btn-primary" onclick="executeTransfer()">تنفيذ النقل وإبلاغ الفرعين</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+      }
+
+      // و) نافذة الإشعارات (تفتح الحدث مباشرة)
+      if (ui.showNotifModal) {
+        var notifs = state.notifications.filter(function(n) { return n.role === ui.role; }).slice().reverse();
+        var nHtml = notifs.length === 0
+          ? '<div style="text-align:center;padding:24px;font-size:12px;color:var(--text-muted);">لا توجد إشعارات حالياً.</div>'
+          : notifs.map(function(n) {
+              return (
+                '<button style="width:100%;text-align:right;padding:10px;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;background:' + (n.read ? '#fff' : 'var(--green-bg)') + ';" onclick="openNotifEvent(\'' + n.id + '\')">' +
+                  '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;"><span>' + n.title + '</span><span class="mono" style="color:var(--text-muted);">' + n.time + '</span></div>' +
+                  '<div style="font-size:12px;margin-top:4px;">' + n.text + '</div>' +
+                  '<div style="font-size:11px;font-weight:800;color:var(--wa-green);margin-top:4px;">اضغط للانتقال للرسالة نفسها</div>' +
+                '</button>'
+              );
+            }).join('');
+
+        html +=
+          '<div class="modal-backdrop" onclick="ui.showNotifModal=false;render()">' +
+            '<div class="modal-box" onclick="event.stopPropagation()">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+                '<strong style="font-size:15px;">الإشعارات الواردة</strong>' +
+                '<button class="btn btn-outline" style="min-height:34px;font-size:11px;" onclick="ui.showNotifModal=false;render()">إغلاق</button>' +
+              '</div>' +
+              nHtml +
+            '</div>' +
+          '</div>';
+      }
+
+      // ز) قائمة الخيارات الأربعة عند الضغط على الهيدر
+      if (ui.showBranchMenuModal && ui.role === 'branch') {
+        var mbr = state.branches.find(function(b) { return b.id === ui.branchId; });
+        html +=
+          '<div class="modal-backdrop" onclick="ui.showBranchMenuModal=false;render()">' +
+            '<div class="modal-box" onclick="event.stopPropagation()">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+                '<div><strong style="font-size:15px;">الأدمن · ' + mbr.name + '</strong><div style="font-size:11px;color:var(--text-muted);">اختر القسم المطلوب</div></div>' +
+                '<button class="btn btn-outline" style="min-height:34px;font-size:11px;" onclick="ui.showBranchMenuModal=false;render()">إغلاق</button>' +
+              '</div>' +
+              '<div style="display:grid;gap:8px;">' +
+                '<button class="btn btn-soft-green" style="justify-content:flex-start;" onclick="ui.showBranchMenuModal=false;setBranchTab(\'today\')">خطة الأسبوع</button>' +
+                '<button class="btn btn-outline" style="justify-content:flex-start;" onclick="ui.showBranchMenuModal=false;setBranchTab(\'team\')">طاقم الفرع</button>' +
+                '<button class="btn btn-outline" style="justify-content:flex-start;" onclick="ui.showBranchMenuModal=false;openAddEmp()">إضافة موظف</button>' +
+                '<button class="btn btn-outline" style="justify-content:flex-start;" onclick="ui.showBranchMenuModal=false;ui.showNotifModal=true;render()">الإشعارات</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+      }
+
+      return html;
+    }
+
+    // =========================================================================
+    // 7. الأوامر والتفاعلات
+    // =========================================================================
+    function goScreen(s) { ui.screen = s; render(); }
+    function setGuideTab(t) { ui.guideTab = t; render(); }
+    function nextGuideTab() {
+      var order = ['idea', 'branch', 'admin', 'live'];
+      var idx = order.indexOf(ui.guideTab);
+      if (idx < order.length - 1) ui.guideTab = order[idx + 1];
+      else ui.screen = 'login';
+      render();
+    }
+
+    function tapKey(k) {
+      ui.loginError = '';
+      if (k === 'مسح') ui.pinInput = '';
+      else if (k === 'حذف') ui.pinInput = ui.pinInput.slice(0, -1);
+      else if (ui.pinInput.length < 6) ui.pinInput += k;
+      render();
+    }
+
+    function quickLogin(pin) { ui.pinInput = pin; submitPin(); }
+
+    function submitPin() {
+      if (ui.pinInput === state.adminPin) {
+        ui.role = 'central';
+        ui.screen = 'admin';
+        ui.pinInput = '';
+        ui.loginError = '';
+        render();
+        return;
+      }
+      var br = state.branches.find(function(b) { return b.pin === ui.pinInput; });
+      if (br) {
+        ui.role = 'branch';
+        ui.branchId = br.id;
+        ui.branchTab = 'chat';
+        ui.screen = 'branch';
+        ui.pinInput = '';
+        ui.loginError = '';
+        render();
+        return;
+      }
+      ui.loginError = 'الرمز غير صحيح — جرب 0000 للأدمن أو 12341 لفرع الصنادلي';
+      render();
+    }
+
+    function logout() {
+      ui.role = null;
+      ui.screen = 'login';
+      ui.adminModalBranchId = null;
+      render();
+    }
+
+    function resetDemo() {
+      state = createInitialState();
+      showToast('تمت إعادة تصفير التجربة');
+    }
+
+    function setBranchTab(t) { ui.branchTab = t; render(); }
+    function setTodayOffset(o) { ui.todayOffset = o; render(); }
+    function setAdminShift(s) { ui.adminShift = s; render(); }
+    function closeModals() {
+      ui.showCheckSheet = false;
+      ui.showAddEmpModal = false;
+      ui.dialMode = null;
+      ui.adminModalBranchId = null;
+      ui.showNotifModal = false;
+      ui.showBranchMenuModal = false;
+      ui.showReadOnlyPlanModal = null;
+      ui.showTransferModal = null;
+      render();
+    }
+
+    function openCheckSheet(shift) {
+      ui.branchShift = shift;
+      var existing = state.submissions[ui.branchId + '|' + shift];
+      ui.draftRows = existing ? existing.rows.map(function(r) { return Object.assign({}, r); }) : buildPlannedRows(ui.branchId, shift);
+      ui.showCheckSheet = true;
+      render();
+    }
+
+    function fillByPlan() {
+      ui.draftRows = buildPlannedRows(ui.branchId, ui.branchShift);
+      showToast('تمت التعبئة تلقائياً حسب خطة الغد');
+    }
+
+    function toggleDraftRow(idx) {
+      var row = ui.draftRows[idx];
+      row.available = !row.available;
+      if (!row.available && !row.reason) row.reason = 'ظرف شخصي';
+      if (row.available) row.reason = '';
+      render();
+    }
+
+    function sendAvailability() {
+      var br = state.branches.find(function(b) { return b.id === ui.branchId; });
+      var key = br.id + '|' + ui.branchShift;
+      var prev = state.submissions[key];
+      var actual = ui.draftRows.filter(function(r) { return r.available; }).length;
+      var diffNotes = [];
+
+      if (prev) {
+        ui.draftRows.forEach(function(r) {
+          var oldRow = prev.rows.find(function(x) { return x.empId === r.empId; });
+          if (oldRow && oldRow.available !== r.available) {
+            diffNotes.push(r.name + ' تغير إلى ' + (r.available ? 'متاح' : 'غير متاح'));
+          }
+        });
+      }
+
+      var availList = ui.draftRows.filter(function(r) { return r.available; }).map(function(r) { return '- ' + r.name; }).join('\n');
+      var unavailList = ui.draftRows.filter(function(r) { return !r.available; }).map(function(r) { return '- ' + r.name + ' (' + r.reason + ')'; }).join('\n');
+      var txt = 'توفر ' + SHIFTS_AR[ui.branchShift] + ' — ' + br.name + '\nغداً ' + fmtDateAr(TOMORROW_ISO) +
+        '\nالحضور (' + actual + '):\n' + (availList || '- لا يوجد') +
+        (unavailList ? '\nغير المتاحين:\n' + unavailList : '');
+
+      var tNow = timeNowAr();
+      var msgId = 'msg_' + Date.now();
+      var isEdited = !!prev;
+      var editDiff = diffNotes.length ? diffNotes.join('، ') : (prev ? 'تحديث الكشف في نفس اليوم' : '');
+
+      state.submissions[key] = {
+        branchId: br.id, shift: ui.branchShift, actual: actual, required: br.required[ui.branchShift],
+        time: tNow, rows: ui.draftRows.map(function(r) { return Object.assign({}, r); })
+      };
+
+      state.messages.push({
+        id: msgId, branchId: br.id, sender: 'branch', shift: ui.branchShift,
+        time: tNow, readByAdmin: false, isEdited: isEdited, editDiff: editDiff, text: txt
+      });
+
+      state.notifications.push({
+        id: 'n_' + Date.now(), role: 'central', branchId: br.id, shift: ui.branchShift,
+        msgId: msgId, title: br.name,
+        text: (isEdited ? 'تعديل جديد: ' + editDiff : 'إرسال ' + SHIFTS_AR[ui.branchShift]),
+        time: tNow, read: false
+      });
+
+      ui.showCheckSheet = false;
+      showToast(isEdited ? 'تم إرسال التعديل للأدمن' : 'تم الإرسال بنجاح');
+    }
+
+    function sendFreeText(senderRole) {
+      var inputEl = document.getElementById(senderRole === 'branch' ? 'branchMsgInput' : 'adminMsgInput');
+      var txt = (inputEl ? inputEl.value : '').trim();
+      if (!txt) return;
+      var targetBranch = senderRole === 'branch' ? ui.branchId : ui.adminModalBranchId;
+      var tNow = timeNowAr();
+      var msgId = 'msg_' + Date.now();
+      state.messages.push({
+        id: msgId, branchId: targetBranch, sender: senderRole === 'branch' ? 'branch' : 'admin',
+        shift: ui.adminShift, time: tNow, readByAdmin: senderRole === 'central', isEdited: false, editDiff: '', text: txt
+      });
+      state.notifications.push({
+        id: 'n_' + Date.now(), role: senderRole === 'branch' ? 'central' : 'branch',
+        branchId: targetBranch, shift: ui.adminShift, msgId: msgId,
+        title: senderRole === 'branch' ? state.branches.find(function(b){return b.id===targetBranch;}).name : 'الأدمن',
+        text: txt, time: tNow, read: false
+      });
+      render();
+    }
+
+    function openAdminBranch(branchId) {
+      ui.adminModalBranchId = branchId;
+      render();
+    }
+
+    function ackMsg(msgId) {
+      var m = state.messages.find(function(x) { return x.id === msgId; });
+      if (m) m.readByAdmin = true;
+      showToast('تم الاطلاع وتأكيد الاستلام للفرع');
+    }
+
+    function openNotifEvent(notifId) {
+      var n = state.notifications.find(function(x) { return x.id === notifId; });
+      if (!n) return;
+      n.read = true;
+      ui.showNotifModal = false;
+      ui.focusMsgId = n.msgId;
+      if (ui.role === 'central') {
+        ui.adminShift = n.shift;
+        ui.adminModalBranchId = n.branchId;
+      } else {
+        ui.branchTab = 'chat';
+      }
+      render();
+    }
+
+    function openAddEmp() {
+      ui.newEmp = { name: '', shift: 'morning', weeklyOff: 5, monthlyDay: null, monthlyDays: 2 };
+      ui.dialMode = 'weekly';
+      ui.showAddEmpModal = true;
+      render();
+    }
+
+    function pickDialValue(v) {
+      if (ui.dialMode === 'weekly') ui.newEmp.weeklyOff = v;
+      else if (ui.dialMode === 'monthlyDay') ui.newEmp.monthlyDay = v;
+      else ui.newEmp.monthlyDays = v;
+      render();
+    }
+
+    function saveNewEmp() {
+      if (!ui.newEmp.name.trim()) { showToast('أدخل اسم الموظف أولاً'); return; }
+      var br = state.branches.find(function(b) { return b.id === ui.branchId; });
+      br.emps.push({
+        id: 'emp_' + Date.now(), name: ui.newEmp.name.trim(), shift: ui.newEmp.shift,
+        weeklyOff: ui.newEmp.weeklyOff, monthlyDay: ui.newEmp.monthlyDay, monthlyDays: ui.newEmp.monthlyDays
+      });
+      ui.showAddEmpModal = false;
+      ui.dialMode = null;
+      showToast('تمت إضافة الموظف مع إجازاته');
+    }
+
+    function removeEmp(empId) {
+      var br = state.branches.find(function(b) { return b.id === ui.branchId; });
+      br.emps = br.emps.filter(function(e) { return e.id !== empId; });
+      showToast('تم حذف الموظف');
+    }
+
+    function executeTransfer() {
+      var empId = document.getElementById('trEmpId').value;
+      var targetId = document.getElementById('trTargetId').value;
+      var fromBr = state.branches.find(function(b) { return b.id === ui.showTransferModal; });
+      var toBr = state.branches.find(function(b) { return b.id === targetId; });
+      var emp = fromBr.emps.find(function(e) { return e.id === empId; });
+      if (!emp || !toBr) return;
+
+      var tNow = timeNowAr();
+      var txt = 'قرار نقل موظف: انضم ' + emp.name + ' من ' + fromBr.name + ' إلى ' + toBr.name + ' (مؤقت غداً)';
+      state.messages.push({ id: 'tr1_' + Date.now(), branchId: fromBr.id, sender: 'admin', shift: ui.adminShift, time: tNow, readByAdmin: true, isEdited: false, editDiff: '', text: txt });
+      state.messages.push({ id: 'tr2_' + Date.now(), branchId: toBr.id, sender: 'admin', shift: ui.adminShift, time: tNow, readByAdmin: true, isEdited: false, editDiff: '', text: txt });
+      ui.showTransferModal = null;
+      showToast('تم إرسال قرار النقل للفرعين');
+    }
+
+    // الجولة التعليمية الإجبارية بتسلسل سهل
+    var TOUR_STEPS = [
+      {
+        title: 'السلام عليكم أ/ همام',
+        text: 'أهلاً بحضرتك في جولة سريعة لنظام Roast Shift. اضغط الآن على زر «فرع الصنادلي» المضيء لنبدأ خطوات الفرع.',
+        targetId: 'tourQuickBranch_b1',
+        run: function(){ ui.role = null; ui.screen = 'login'; }
+      },
+      {
+        title: '1. لوحة اليوم الأفقية على الهاتف',
+        text: 'الصباحي والمسائي جنباً إلى جنب أفقياً حتى على الهاتف، والأيام والتواريخ بتتغير أوتوماتيك كل يوم. اضغط الآن على «خطة الأسبوع» المضيئة بالأعلى لمعاينتها.',
+        targetId: 'simpleTabToday',
+        run: function(){ ui.role = 'branch'; ui.branchId = 'b1'; ui.branchTab = 'chat'; ui.screen = 'branch'; }
+      },
+      {
+        title: '2. العودة لإرسال توفر الغد',
+        text: 'هنا يظهر جدول الصباحي والمسائي جنباً إلى جنب مع التواريخ التلقائية. اضغط الآن على «المحادثة» المضيئة للرجوع إلى شات الفرع.',
+        targetId: 'simpleTabChat',
+        run: function(){ ui.role = 'branch'; ui.branchId = 'b1'; ui.branchTab = 'today'; ui.screen = 'branch'; }
+      },
+      {
+        title: '3. فتح كشف الوردية الصباحية',
+        text: 'الفرع لا يرى عجزاً ولا زيادة. اضغط الآن على زر «إرسال توفر الصباحي» المضيء.',
+        targetId: 'btnSendMorning',
+        run: function(){ ui.role = 'branch'; ui.branchId = 'b1'; ui.branchTab = 'chat'; ui.screen = 'branch'; }
+      },
+      {
+        title: '4. إرسال الكشف للأدمن',
+        text: 'اضغط على زر «إرسال للأدمن الآن» المضيء ليصل التوفر فوراً إلى شاشة الأدمن.',
+        targetId: 'simpleSendAvailBtn',
+        onAfterTarget: function(){ ui.role = 'central'; ui.screen = 'admin'; ui.adminShift = 'morning'; }
+      },
+      {
+        title: '5. شاشة الأدمن بالألوان وزرا الورديات',
+        text: 'أحمر للعجز، أصفر للفائض، وأخضر للمستقر. اضغط الآن على زر «مسائي» المضيء لتجربة التبديل.',
+        targetId: 'simpleAdminEveningBtn'
+      },
+      {
+        title: 'ختام الجولة — تشغيل يومي أكثر وضوحاً وهدوءاً',
+        text: 'بهذه الخطوات السريعة تكتمل دورة العمل اليومية بين الفروع والأدمن دون تعقيد أو إهدار للوقت، مع تحديث الأيام والتواريخ أوتوماتيك كل يوم. حرصنا على أن تكون التجربة واضحة وعملية لتوفر جهدكم اليومي وتخرج بأفضل صورة ممكنة.',
+        isFinal: true
+      }
+    ];
+
+    function startTour() {
+      ui.tourStep = 0;
+      if (TOUR_STEPS[0].run) TOUR_STEPS[0].run();
+      render();
+    }
+
+    function advanceSimpleTour() {
+      var st = TOUR_STEPS[ui.tourStep];
+      if (st && st.onAfterTarget) st.onAfterTarget();
+      if (ui.tourStep < TOUR_STEPS.length - 1) {
+        ui.tourStep++;
+      } else {
+        ui.tourStep = -1;
+      }
+      render();
+    }
+
+    // =========================================================================
+    // 8. دالة الرسم الرئيسية
+    // =========================================================================
+    function render() {
+      var app = document.getElementById('app');
+      var content = '';
+
+      if (ui.screen === 'guide') {
+        content = renderGuide();
+      } else if (ui.screen === 'login' || !ui.role) {
+        content = renderLogin();
+      } else {
+        var br = state.branches.find(function(b) { return b.id === ui.branchId; });
+        var unreadNotifs = state.notifications.filter(function(n) { return n.role === ui.role && !n.read; }).length;
+
+        var brandOnClick = ui.role === 'branch' ? ' onclick="ui.showBranchMenuModal=true;render()" style="cursor:pointer;text-align:right;"' : '';
+        var header =
+          '<header class="top-header">' +
+            '<div class="top-bar">' +
+              '<div class="brand"' + brandOnClick + '>' +
+                '<div class="brand-circle">RS</div>' +
+                '<div style="min-width:0;">' +
+                  '<div class="brand-title">Roast Shift</div>' +
+                  '<div class="brand-sub">' + (ui.role === 'central' ? 'الأدمن · مراجعة الفروع' : 'الأدمن · ' + br.name + ' ▾') + '</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="header-actions">' +
+                '<button class="pill-btn bright" onclick="startTour()">الجولة</button>' +
+                '<button class="pill-btn ghost" onclick="ui.showNotifModal=true;render()">الإشعارات ' + (unreadNotifs ? '<span class="badge-count">' + unreadNotifs + '</span>' : '') + '</button>' +
+                '<button class="pill-btn ghost" onclick="goScreen(\'guide\')">الدليل</button>' +
+                '<button class="pill-btn ghost" onclick="logout()">خروج</button>' +
+              '</div>' +
+            '</div>' +
+            (ui.role === 'branch'
+              ? '<div class="mobile-tabs cols-3">' +
+                  '<button id="simpleTabChat" class="mobile-tab ' + (ui.branchTab==='chat'?'active':'') + '" onclick="setBranchTab(\'chat\')">المحادثة</button>' +
+                  '<button id="simpleTabToday" class="mobile-tab ' + (ui.branchTab==='today'?'active':'') + '" onclick="setBranchTab(\'today\')">خطة الأسبوع</button>' +
+                  '<button id="simpleTabTeam" class="mobile-tab ' + (ui.branchTab==='team'?'active':'') + '" onclick="setBranchTab(\'team\')">طاقم الفرع</button>' +
+                '</div>'
+              : '') +
+          '</header>';
+
+        var mainBody = ui.role === 'branch' ? renderBranchView() : renderAdminView();
+        content = '<div class="app-shell">' + header + mainBody + '</div>';
+      }
+
+      var tourHtml = '';
+      if (ui.tourStep >= 0) {
+        var st = TOUR_STEPS[ui.tourStep];
+        var isLast = ui.tourStep === TOUR_STEPS.length - 1;
+        tourHtml =
+          '<div id="simpleTourBar" class="tour-bar">' +
+            '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--wa-accent);font-weight:800;margin-bottom:4px;">' +
+              '<span>جولة Roast Shift (' + (ui.tourStep + 1) + ' / ' + TOUR_STEPS.length + ')</span>' +
+              '<button style="color:#aebac1;font-weight:800;" onclick="ui.tourStep=-1;render()">إغلاق</button>' +
+            '</div>' +
+            '<div style="font-size:14px;font-weight:800;margin-bottom:4px;">' + st.title + '</div>' +
+            '<div style="font-size:12px;color:#d1d7db;margin-bottom:10px;">' + st.text + '</div>' +
+            '<div style="display:flex;justify-content:flex-end;">' +
+              (st.targetId && !isLast
+                ? '<span style="font-size:11px;font-weight:800;color:var(--wa-accent);">اضغط على الزر المضيء للمتابعة</span>'
+                : '<button class="btn btn-accent" style="min-height:36px;padding:6px 14px;font-size:12px;" onclick="advanceSimpleTour()">بدء الاستخدام الآن</button>') +
+            '</div>' +
+          '</div>';
+      }
+
+      app.innerHTML = content + renderModals() + tourHtml + (ui.toast ? '<div class="toast">' + ui.toast + '</div>' : '');
+
+      if (ui.tourStep >= 0) {
+        var activeStep = TOUR_STEPS[ui.tourStep];
+        var tourBarEl = document.getElementById('simpleTourBar');
+        if (activeStep && activeStep.targetId && !activeStep.isFinal) {
+          document.body.classList.add('tour-spotlight-mode');
+          var targetEl = document.getElementById(activeStep.targetId);
+          if (targetEl) {
+            targetEl.classList.add('tour-highlight');
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (tourBarEl) {
+              var rect = targetEl.getBoundingClientRect();
+              if (rect.bottom > window.innerHeight * 0.45) {
+                tourBarEl.classList.add('top-pos');
+              } else {
+                tourBarEl.classList.remove('top-pos');
+              }
+            }
+            var origOnClick = targetEl.onclick;
+            targetEl.onclick = function(ev) {
+              if (origOnClick) origOnClick.call(targetEl, ev);
+              setTimeout(advanceSimpleTour, 60);
+            };
+          }
+        } else {
+          document.body.classList.remove('tour-spotlight-mode');
+        }
+      } else {
+        document.body.classList.remove('tour-spotlight-mode');
+      }
+    }
+
+    render();
+  </script>
+</body>
+</html>
